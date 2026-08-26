@@ -329,3 +329,95 @@ describe("WalletBadge — interactions", () => {
   });
 });
 
+describe("WalletBadge — empty data states & placeholder elements", () => {
+  it("renders descriptive placeholder elements when address is an empty string or whitespace", () => {
+    render(<WalletBadge address="" />);
+
+    const badge = screen.getByTestId("wallet-badge");
+    expect(badge).toHaveAttribute("data-empty-state", "true");
+
+    const addressNode = screen.getByTestId("wallet-address-text");
+    expect(addressNode).toHaveTextContent("Not Connected");
+    expect(addressNode.className).toContain("italic");
+
+    const placeholderBadge = screen.getByTestId("wallet-badge-placeholder");
+    expect(placeholderBadge).toBeInTheDocument();
+    expect(placeholderBadge).toHaveTextContent("Empty");
+  });
+
+  it("renders empty list placeholder tag when accounts is an empty array []", () => {
+    render(
+      <WalletBadge
+        address="GABC123456789012345678901234567890123456789012345678901234"
+        accounts={[]}
+      />
+    );
+
+    const badge = screen.getByTestId("wallet-badge");
+    expect(badge).toHaveAttribute("data-empty-state", "true");
+
+    const emptyListTag = screen.getByTestId("wallet-empty-list-placeholder");
+    expect(emptyListTag).toBeInTheDocument();
+    expect(emptyListTag).toHaveTextContent("No active accounts");
+  });
+
+  it("renders empty list placeholder tag when wallets is an empty array []", () => {
+    render(<WalletBadge wallets={[]} />);
+
+    const emptyListTag = screen.getByTestId("wallet-empty-list-placeholder");
+    expect(emptyListTag).toBeInTheDocument();
+    expect(emptyListTag).toHaveTextContent("No wallets available");
+  });
+
+  it("renders empty list placeholder tag when items is an empty array []", () => {
+    render(<WalletBadge items={[]} />);
+
+    const emptyListTag = screen.getByTestId("wallet-empty-list-placeholder");
+    expect(emptyListTag).toBeInTheDocument();
+    expect(emptyListTag).toHaveTextContent("No items available");
+  });
+
+  it("renders custom emptyText in placeholder element when provided", () => {
+    render(<WalletBadge address={null} emptyText="No Address Provided" />);
+
+    expect(screen.getByTestId("wallet-address-text")).toHaveTextContent("No Address Provided");
+    expect(screen.getByTestId("wallet-badge-placeholder")).toHaveTextContent("No Address Provided");
+  });
+
+  it("renders custom emptyPlaceholder node when emptyPlaceholder prop is passed", () => {
+    render(
+      <WalletBadge
+        address=""
+        emptyPlaceholder={<span data-testid="custom-placeholder-node">Select a Wallet</span>}
+      />
+    );
+
+    expect(screen.getByTestId("wallet-badge-placeholder-custom")).toBeInTheDocument();
+    expect(screen.getByTestId("custom-placeholder-node")).toHaveTextContent("Select a Wallet");
+  });
+
+  it("renders empty state placeholder when showEmptyPlaceholder is set to true", () => {
+    render(
+      <WalletBadge
+        address="GABC123456789012345678901234567890123456789012345678901234"
+        showEmptyPlaceholder={true}
+      />
+    );
+
+    const badge = screen.getByTestId("wallet-badge");
+    expect(badge).toHaveAttribute("data-empty-state", "true");
+    expect(screen.getByTestId("wallet-badge-placeholder")).toBeInTheDocument();
+  });
+
+  it("includes accessible empty state description in aria-label", () => {
+    render(<WalletBadge accounts={[]} emptyText="No accounts configured" />);
+
+    const badge = screen.getByTestId("wallet-badge");
+    expect(badge).toHaveAttribute(
+      "aria-label",
+      "Wallet placeholder state: No accounts configured"
+    );
+  });
+});
+
+

@@ -25,6 +25,18 @@ export interface WalletBadgeProps {
   validateAddress?: boolean;
   /** Whether to display the status indicator dot (defaults to true) */
   showStatusDot?: boolean;
+  /** Optional list of connected accounts/addresses for empty list check */
+  accounts?: string[] | null;
+  /** Optional list of supported/available wallets for empty list check */
+  wallets?: string[] | null;
+  /** Optional list of generic data items for empty list check */
+  items?: unknown[] | null;
+  /** Custom text to display when in an empty data state */
+  emptyText?: string;
+  /** Custom placeholder node or element for empty data states */
+  emptyPlaceholder?: React.ReactNode;
+  /** Explicit flag forcing empty placeholder rendering */
+  showEmptyPlaceholder?: boolean;
   /** Callback fired when disconnect action is triggered */
   onDisconnect?: () => void;
   /** Callback fired when badge is clicked */
@@ -53,7 +65,8 @@ export function isValidStellarAddress(address?: string | null): boolean {
  * WalletBadge Component (`wallet_badge`)
  *
  * Header status indicator component representing the current wallet connection status,
- * active wallet provider, network alignment, address, field validation errors, and alerts.
+ * active wallet provider, network alignment, address, field validation errors, alerts,
+ * and descriptive placeholders for empty data states.
  */
 export default function WalletBadge({
   address,
@@ -67,6 +80,12 @@ export default function WalletBadge({
   invalidAddress = false,
   validateAddress = false,
   showStatusDot = true,
+  accounts,
+  wallets,
+  items,
+  emptyText,
+  emptyPlaceholder,
+  showEmptyPlaceholder = false,
   onDisconnect,
   onClick,
   className = "",
@@ -74,6 +93,25 @@ export default function WalletBadge({
 }: WalletBadgeProps) {
   const activeConnected = isConnected !== undefined ? isConnected : Boolean(address);
   const hasMismatch = Boolean(networkMismatch);
+
+  // Empty list data state checks
+  const emptyAccountsList = Array.isArray(accounts) && accounts.length === 0;
+  const emptyWalletsList = Array.isArray(wallets) && wallets.length === 0;
+  const emptyItemsList = Array.isArray(items) && items.length === 0;
+  const hasEmptyListState = emptyAccountsList || emptyWalletsList || emptyItemsList;
+
+  // Address check for empty or whitespace strings
+  const isEmptyAddressString = typeof address === "string" && address.trim() === "";
+  const addressIsEmpty = !address || isEmptyAddressString;
+
+  const hasExplicitEmptyProp =
+    showEmptyPlaceholder ||
+    hasEmptyListState ||
+    emptyText !== undefined ||
+    emptyPlaceholder !== undefined;
+
+  // Consolidated empty data state flag
+  const isEmptyDataState = hasExplicitEmptyProp || isEmptyAddressString;
 
   // Address validation check
   const addressFormatInvalid =
@@ -93,8 +131,17 @@ export default function WalletBadge({
   const alertMessage =
     typeof alert === "string" ? alert : alert ? "Configuration alert" : null;
 
+  // Empty state list label resolution
+  const emptyListLabel = emptyAccountsList
+    ? "No active accounts"
+    : emptyWalletsList
+    ? "No wallets available"
+    : emptyItemsList
+    ? "No items available"
+    : "Empty data state";
+
   // Status label & ARIA label derivation
-  let statusText = "Not Connected";
+  let statusText = emptyText || "Not Connected";
   let statusState: "connected" | "connecting" | "mismatch" | "error" | "alert" | "disconnected" =
     "disconnected";
 
@@ -102,15 +149,15 @@ export default function WalletBadge({
     statusText = "Connecting...";
     statusState = "connecting";
   } else if (hasError) {
-    statusText = address ? formatAddress(address) : errorMessage || "Invalid Configuration";
+    statusText = address && !addressIsEmpty ? formatAddress(address) : errorMessage || "Invalid Configuration";
     statusState = "error";
   } else if (hasMismatch) {
-    statusText = address ? formatAddress(address) : "Network Mismatch";
+    statusText = address && !addressIsEmpty ? formatAddress(address) : "Network Mismatch";
     statusState = "mismatch";
   } else if (hasAlert) {
-    statusText = address ? formatAddress(address) : alertMessage || "Alert";
+    statusText = address && !addressIsEmpty ? formatAddress(address) : alertMessage || "Alert";
     statusState = "alert";
-  } else if (activeConnected && address) {
+  } else if (activeConnected && address && !addressIsEmpty) {
     statusText = formatAddress(address);
     statusState = "connected";
   }
@@ -126,6 +173,8 @@ export default function WalletBadge({
       ? "Wallet connecting"
       : statusState === "mismatch"
       ? `Wallet network mismatch ${address || ""}`.trim()
+      : isEmptyDataState
+      ? `Wallet placeholder state: ${emptyText || emptyListLabel || "Not connected"}`
       : "Wallet not connected";
 
   // Dot color classes matching design system
@@ -143,11 +192,15 @@ export default function WalletBadge({
     ? "border-red-500/50 bg-red-950/40 text-red-200 hover:border-red-400"
     : hasAlert
     ? "border-amber-500/50 bg-amber-950/40 text-amber-200 hover:border-amber-400"
+    : isEmptyDataState
+    ? "border-gray-700/60 border-dashed bg-gray-900/60 text-gray-400 hover:border-gray-600"
     : "border-gray-800 bg-gray-900/90 text-gray-200 hover:border-gray-700";
 
   const content = (
+    /* eslint-disable-next-line jsx-a11y/role-supports-aria-props */
     <div
       data-testid={testId}
+      data-empty-state={isEmptyDataState ? "true" : undefined}
       role="status"
       aria-label={ariaLabel}
       aria-invalid={hasError ? true : undefined}
@@ -174,9 +227,39 @@ export default function WalletBadge({
         </span>
       )}
 
-      <span data-testid="wallet-address-text" className="tracking-wide">
-        {statusText}
-      </span>
+      {/* Empty data state custom node override */}
+      {isEmptyDataState && emptyPlaceholder ? (
+        <div data-testid="wallet-badge-placeholder-custom">{emptyPlaceholder}</div>
+      ) : (
+        <>
+          <span
+            data-testid="wallet-address-text"
+            className={`tracking-wide ${isEmptyDataState && addressIsEmpty ? "italic text-gray-400" : ""}`}
+          >
+            {statusText}
+          </span>
+
+          {/* Empty list placeholder tag */}
+          {hasEmptyListState && (
+            <span
+              data-testid="wallet-empty-list-placeholder"
+              className="text-xs font-sans text-amber-300/80 bg-amber-950/40 border border-amber-800/40 px-1.5 py-0.5 rounded"
+            >
+              {emptyText || emptyListLabel}
+            </span>
+          )}
+
+          {/* Descriptive badge placeholder element for empty data states */}
+          {isEmptyDataState && (
+            <span
+              data-testid="wallet-badge-placeholder"
+              className="text-xs font-sans text-gray-400/90 bg-gray-800/50 border border-gray-700/50 px-1.5 py-0.5 rounded font-normal"
+            >
+              {emptyText || "Empty"}
+            </span>
+          )}
+        </>
+      )}
 
       {/* Field error indicator & text message toggle */}
       {hasError && (
@@ -186,7 +269,9 @@ export default function WalletBadge({
           aria-live="polite"
           className="inline-flex items-center gap-1 text-xs font-sans text-red-400 bg-red-950/80 border border-red-800/60 px-2 py-0.5 rounded font-medium"
         >
-          <span aria-hidden="true" className="font-bold">⚠</span>
+          <span aria-hidden="true" className="font-bold">
+            ⚠
+          </span>
           <span data-testid="wallet-error-text">{errorMessage || "Invalid configuration"}</span>
         </span>
       )}
@@ -222,4 +307,5 @@ export default function WalletBadge({
 
   return content;
 }
+
 
