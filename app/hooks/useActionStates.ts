@@ -1,18 +1,21 @@
 "use client";
 
 import { useCallback, useState } from "react";
+
 import { TxPhase, isTxPending } from "@/app/lib/transactions";
 
 export interface ActionState {
   phase: TxPhase;
   error: string | null;
   txHash: string | null;
+  isLoading: boolean;
 }
 
 const defaultState: ActionState = {
   phase: "idle",
   error: null,
   txHash: null,
+  isLoading: false,
 };
 
 export function useActionStates() {
@@ -25,6 +28,11 @@ export function useActionStates() {
 
   const isPending = useCallback(
     (key: string) => isTxPending(getState(key).phase),
+    [getState]
+  );
+
+  const isLoading = useCallback(
+    (key: string) => getState(key).isLoading,
     [getState]
   );
 
@@ -49,6 +57,13 @@ export function useActionStates() {
     }));
   }, []);
 
+  const setLoading = useCallback((key: string, value: boolean) => {
+    setStates((prev) => ({
+      ...prev,
+      [key]: { ...(prev[key] ?? defaultState), isLoading: value },
+    }));
+  }, []);
+
   const resetAction = useCallback((key: string) => {
     setStates((prev) => ({
       ...prev,
@@ -59,9 +74,11 @@ export function useActionStates() {
   return {
     getState,
     isPending,
+    isLoading,
     setPhase,
     setError,
     setTxHash,
+    setLoading,
     resetAction,
   };
 }
