@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { TransactionBuilder } from "@stellar/stellar-sdk";
 import {
   parseFreighterMultiSigEnvelope,
@@ -29,7 +29,26 @@ import {
  * The signing step is intentionally separated so callers can collect
  * signatures from multiple wallets before assembling the final XDR.
  */
-export function useFreighterMultiSigAssembly(networkPassphrase: string) {
+export function ueFreighterMultiSigAssembly(networkPassphrase: string) {
+  const [pendingOps, setPendingOps] = useState(0);
+
+  /**
+   * Runs an async operation while tracking loading state. When any
+   * operation is in flight, `isLoading` becomes true, allowing
+   * transaction_signer_component to display a spinner overlay.
+   */
+  const withLoading = useCallback(
+    async <T>(operation: () => Promise<T>): Promise<T> => {
+      setPendingOps((count) => count + 1);
+      try {
+        return await operation();
+      } finally {
+        setPendingOps((count) => count - 1);
+      }
+    },
+    []
+  );
+
   const parseStructure = useCallback(
     (transactionXdr: string): WalletMultiSigEnvelopeShape => {
       const envelopeParser = createStellarEnvelopeParser(networkPassphrase);
@@ -93,7 +112,7 @@ export function useFreighterMultiSigAssembly(networkPassphrase: string) {
   /**
    * Signs a transaction XDR using the provided signing function and returns
    * the signed XDR. Separated from assembly so callers can collect
-   * signatures independently.
+   * signatures independently. Triggers loading state during execution.
    */
   const signTransaction = useCallback(
     async (
@@ -102,9 +121,9 @@ export function useFreighterMultiSigAssembly(networkPassphrase: string) {
     ): Promise<string> => {
       const trimmed = transactionXdr.trim();
       parseStructure(trimmed);
-      return signFn(trimmed);
+      return withLoading(() => signFn(trimmed));
     },
-    [parseStructure]
+    [parseStructure, withLoading]
   );
 
   /**
@@ -120,6 +139,7 @@ export function useFreighterMultiSigAssembly(networkPassphrase: string) {
 
   /**
    * Signs a split through Freighter using the provided signing function.
+   * Triggers loading state during execution.
    */
   const signSplit = useCallback(
     async (
@@ -127,9 +147,9 @@ export function useFreighterMultiSigAssembly(networkPassphrase: string) {
       signFn: FreighterMultiSigSignFn,
       timeoutMs?: number
     ): Promise<FreighterMultiSigSplit> => {
-      return signFreighterMultiSigSplit(split, signFn, timeoutMs);
+      return withLoading(() => signFreighterMultiSigSplit(split, signFn, timeoutMs));
     },
-    []
+    [withLoading]
   );
 
   /**
@@ -147,8 +167,11 @@ export function useFreighterMultiSigAssembly(networkPassphrase: string) {
     []
   );
 
+  const isLoading = pendingOps > 0;
+
   return useMemo(
     () => ({
+      isLoading,
       parseStructure,
       prepareTransaction,
       serializeTransaction,
@@ -158,6 +181,7 @@ export function useFreighterMultiSigAssembly(networkPassphrase: string) {
       assemble,
     }),
     [
+      isLoading,
       parseStructure,
       prepareTransaction,
       serializeTransaction,
