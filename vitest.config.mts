@@ -17,5 +17,17 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
+    server: {
+      deps: {
+        // `@stellar/freighter-api` ships only a CommonJS bundle (its
+        // package.json declares `main` but no `module`/`exports` ESM entry),
+        // so Vite cannot statically resolve the named imports that
+        // freighter_connector.ts and the Wallets Kit use — the suite fails
+        // to collect with "does not provide an export named 'getAddress'".
+        // Inlining it lets Vite transform the CJS bundle and synthesise the
+        // named exports.
+        inline: ["@stellar/freighter-api", "@creit.tech/stellar-wallets-kit"],
+      },
+    },
   },
 });
