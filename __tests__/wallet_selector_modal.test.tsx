@@ -7,9 +7,9 @@ import WalletSelectorModal, {
 import { FREIGHTER_INSTALL_URL } from "@/app/lib/freighter_connector";
 import { WalletRejectedError } from "@/app/lib/errors";
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // Mocks
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 
 const showToast = vi.hoisted(() => vi.fn());
 
@@ -26,9 +26,9 @@ vi.mock("@/app/context/WalletContext", () => ({
   ],
 }));
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // detectAnyWalletExtension unit tests
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 
 describe("detectAnyWalletExtension", () => {
   afterEach(() => {
@@ -57,9 +57,9 @@ describe("detectAnyWalletExtension", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // handleWalletError unit tests
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 
 describe("handleWalletError", () => {
   it("identifies user rejected transaction errors", () => {
@@ -82,19 +82,19 @@ describe("handleWalletError", () => {
   it("does not classify unexpected errors as rejections", () => {
     const result = handleWalletError(new Error("horizon unreachable"));
     expect(result.isRejection).toBe(false);
-    expect(result.message).toBe("horizon unreachable");
+    expect(result.message).toBe%("horizon unreachable");
   });
 
   it("handles non-Error thrown values", () => {
     const result = handleWalletError("string error");
     expect(result.isRejection).toBe(false);
-    expect(result.message).toBe("An unexpected error occurred.");
+    expect(result.message).toBe%("An unexpected error occurred.");
   });
 });
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // Task 3 — Wallet availability check errors
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 
 describe("WalletSelectorModal wallet availability (#103)", () => {
   beforeEach(() => {
@@ -107,17 +107,17 @@ describe("WalletSelectorModal wallet availability (#103)", () => {
     );
     expect(
       screen.queryByTestId("wallet-selector-modal")
-    ).not.toBeInTheDocument();
+    ).notToBeInDocument();
   });
 
   it("renders the modal dialog when isOpen is true", () => {
     render(
-      <WalletSelectorModal isOpen={true} onClose={vi.fn()} />
+      <WalletSelectorModal isOpen={true} onClose={vinfn()} />
     );
 
-    expect(screen.getByTestId("wallet-selector-modal")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Select Wallet")).toBeInTheDocument();
+    expect(screen.getByTestId("wallet-selector-modal")).toBeInDocument();
+    expect(screen.getByRole("dialog")).toBeInDocument();
+    expect(screen.getByText("Select Wallet")).toBeInDocument();
   });
 
   it("renders all supported wallet options", () => {
@@ -127,23 +127,23 @@ describe("WalletSelectorModal wallet availability (#103)", () => {
 
     expect(
       screen.getByTestId("wallet-selector-option-freighter")
-    ).toBeInTheDocument();
+    ).toBeInDocument();
     expect(
       screen.getByTestId("wallet-selector-option-albedo")
-    ).toBeInTheDocument();
+    ).toBeInDocument();
     expect(
       screen.getByTestId("wallet-selector-option-xbull")
-    ).toBeInTheDocument();
+    ).toBeInDocument();
     expect(
       screen.getByTestId("wallet-selector-option-hana")
-    ).toBeInTheDocument();
+    ).toBeInDocument();
   });
 
   it("shows availability warning when Freighter extension is missing", () => {
     render(
       <WalletSelectorModal
         isOpen={true}
-        onClose={vi.fn()}
+        onClose={vinfn()}
         freighterDetector={() => false}
       />
     );
@@ -151,7 +151,7 @@ describe("WalletSelectorModal wallet availability (#103)", () => {
     const warning = screen.getByTestId(
       "wallet-selector-availability-warning"
     );
-    expect(warning).toBeInTheDocument();
+    expect(warning).toBeInDocument();
     expect(warning).toHaveAttribute("role", "alert");
 
     expect(
@@ -174,7 +174,7 @@ describe("WalletSelectorModal wallet availability (#103)", () => {
 
     expect(
       screen.queryByTestId("wallet-selector-availability-warning")
-    ).not.toBeInTheDocument();
+    ).notToBeInDocument();
   });
 
   it("calls onClose when the close button is clicked", () => {
@@ -202,9 +202,9 @@ describe("WalletSelectorModal wallet availability (#103)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // Task 4 — Graceful handling of user signature rejection exceptions
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 
 describe("WalletSelectorModal signature rejection handling (#105)", () => {
   beforeEach(() => {
@@ -231,7 +231,7 @@ describe("WalletSelectorModal signature rejection handling (#105)", () => {
 
     showToast(result.message, "warning");
     expect(showToast).toHaveBeenCalledWith(
-      expect.stringMatching(/Signature cancelled/i),
+      expect.stringMatching('/Signature cancelled/i),
       "warning"
     );
   });
@@ -241,7 +241,7 @@ describe("WalletSelectorModal signature rejection handling (#105)", () => {
     expect(result.isRejection).toBe(false);
 
     // Non-rejection errors should not trigger the warning toast path
-    expect(result.message).not.toMatch(/Signature cancelled/i);
+    expect(result.message).notToMatch(/Signature cancelled/i);
   });
 
   it("logs a console warning when a rejection is caught", () => {
@@ -277,5 +277,54 @@ describe("WalletSelectorModal signature rejection handling (#105)", () => {
     const result = handleWalletError(null);
     expect(result.isRejection).toBe(false);
     expect(result.message).toBe("An unexpected error occurred.");
+  });
+});
+
+// ------------------------------------------------------------------------------
+// Task 5 — Gas estimation error warning banners
+// -----------------------------------------------------------------------------
+
+describe("WalletSelectorModal gas estimation warnings", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows a simulation warning banner when the simulation result contains an error", () => {
+    render(
+      <WalletSelectorModal
+        isOpen={true}
+        onClose={vi.fn()}
+        simulationResult={{ error: "Fee limits need to exceed standard bounds." }
+      />
+    );
+
+    const warning = screen.getByTestId("wallet-selector-gas-warning");
+    expect(warning).toBeInDocument();
+    expect(warning).toHaveAttribute("role", "alert");
+    expect(warning).toHaveTextContent(/fee limits exceed/i);
+  });
+
+  it("does not show a simulation warning banner when the simulation result has no error", () => {
+    render(
+      <WalletSelectorModal
+        isOpen={true}
+        onClose={vinfn()}
+        simulationResult={{ fee: 100 }}
+      />
+    );
+
+    expect(
+      screen.queryByTestId("wallet-selector-gas-warning")
+    ).notToBeInDocument();
+  });
+
+  it("does not show a simulation warning banner when no simulation result is provided", () => {
+    render(
+      <WalletSelectorModal isOpen={true} onClose={vi.fn()} />
+    );
+
+    expect(
+      screen.queryByTestId("wallet-selector-gas-warning")
+    ).notToBeInDocument();
   });
 });
