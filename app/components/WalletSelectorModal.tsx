@@ -108,6 +108,18 @@ export default function WalletSelectorModal({
 }: WalletSelectorModalProps) {
   // ---- modal open/close state ----
   const [isOpen, setIsOpen] = useState(false);
+
+  // ---- multi-sig toggle ----
+  const [multiSigMode, setMultiSigMode] = useState(false);
+
+  // ---- multi-sig XDR input + parse state ----
+  const [xdrInput, setXdrInput] = useState("");
+  const [signerInput, setSignerInput] = useState(""); // comma-separated public keys
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [structurePreview, setStructurePreview] =
+    useState<MultiSigTransactionStructure | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
+
   const openModal = useCallback(() => setIsOpen(true), []);
   const closeModal = useCallback(() => {
     setIsOpen(false);
@@ -131,17 +143,6 @@ export default function WalletSelectorModal({
     },
     [closeModal]
   );
-
-  // ---- multi-sig toggle ----
-  const [multiSigMode, setMultiSigMode] = useState(false);
-
-  // ---- multi-sig XDR input + parse state ----
-  const [xdrInput, setXdrInput] = useState("");
-  const [signerInput, setSignerInput] = useState(""); // comma-separated public keys
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [structurePreview, setStructurePreview] =
-    useState<MultiSigTransactionStructure | null>(null);
-  const [isParsing, setIsParsing] = useState(false);
 
   const multiSigHook = useWalletMultiSigAssembly(
     networkPassphrase,

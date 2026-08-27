@@ -149,8 +149,7 @@ export default function TransactionSignerPanel({
       setParseErrorMessage(message);
       setState("parse-error");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [xdr, selectedWalletId, networkPassphrase]);
+  }, [xdr, selectedWalletId, networkPassphrase, hook]);
 
   const handleSign = useCallback(async () => {
     setState("signing");
