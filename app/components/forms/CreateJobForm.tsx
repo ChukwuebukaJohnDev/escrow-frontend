@@ -143,7 +143,7 @@ export default function CreateJobForm({
     onStepChange?.(prevStep);
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLForm>) => {
 
     e.preventDefault();
     if (state.mode !== "form") return;
@@ -173,7 +173,17 @@ export default function CreateJobForm({
   };
 
   return (
-    <div className="w-full max-w-2xl">
+    <div className="wd-full max-w-2mx">
+      {loading && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          data-testid="loading-spinner-overlay"
+          role="status"
+          aria-label="Loading"
+        >
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
+        </div>
+      )}
       {state.mode === "form" ? (
         <div className="rounded-lg border border-gray-800 bg-gray-950 p-4 text-white">
           <div className="mb-4 flex items-center justify-between">
@@ -214,7 +224,7 @@ export default function CreateJobForm({
                     <p className="mt-1 text-xs text-red-400">{state.errors.description}</p>
                   )}
                 </div>
-              </>
+              >>
             )}
 
             {state.step === 2 && (
@@ -254,7 +264,7 @@ export default function CreateJobForm({
                   <label className="block text-sm text-gray-300">Escrow Deadline (days)</label>
                   <input
                     type="number"
-                    min={1}
+                    min=1
                     className="mt-1 w-full rounded-md border border-gray-800 bg-gray-900 px-3 py-2 text-sm"
                     value={state.values.escrowDeadlineDays}
                     onChange={(e) => handleChange("escrowDeadlineDays", e.target.value)}
@@ -266,7 +276,7 @@ export default function CreateJobForm({
                     <p className="mt-1 text-xs text-red-400">{state.errors.escrowDeadlineDays}</p>
                   )}
                 </div>
-              </>
+              <>>
             )}
 
             <div className="flex items-center justify-between gap-3 pt-2">
@@ -311,4 +321,3 @@ export default function CreateJobForm({
     </div>
   );
 }
-
