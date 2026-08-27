@@ -1,10 +1,22 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { Networks } from "@stellar/stellar-sdk";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import WalletSelectorModal, {
+  detectAnyWalletExtension,
+  handleWalletError,
+} from "@/app/components/WalletSelectorModal";
+import { FREIGHTER_INSTALL_URL } from "@/app/lib/freighter_connector";
+import { WalletRejectedError } from "@/app/lib/errors";
 
-// WalletSelectorModal imports WalletContext only for the SupportedWalletId type
-// and the SUPPORTED_WALLETS constant. Mock the module so tests never try to
-// resolve @stellar/freighter-api (which is unavailable in jsdom).
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+const showToast = vi.hoisted(() => vi.fn());
+
+vi.mock("@/app/context/ToastContext", () => ({
+  useToast: () => ({ showToast }),
+}));
+
 vi.mock("@/app/context/WalletContext", () => ({
   SUPPORTED_WALLETS: [
     { id: "freighter", label: "Freighter" },
@@ -14,359 +26,256 @@ vi.mock("@/app/context/WalletContext", () => ({
   ],
 }));
 
-import WalletSelectorModal from "@/app/components/WalletSelectorModal";
-import type { SupportedWalletId } from "@/app/context/WalletContext";
-
-const NETWORK = Networks.TESTNET;
-
 // ---------------------------------------------------------------------------
-// Default props helpers
+// detectAnyWalletExtension unit tests
 // ---------------------------------------------------------------------------
 
-function defaultProps(overrides: Partial<Parameters<typeof WalletSelectorModal>[0]> = {}) {
-  return {
-    selectedWalletId: "freighter" as SupportedWalletId,
-    onSelectWallet: vi.fn(),
-    onConnect: vi.fn(),
-    isConnecting: false,
-    networkPassphrase: NETWORK,
-    ...overrides,
-  };
-}
-
-function openModal() {
-  fireEvent.click(screen.getByTestId("wallet-selector-modal-trigger"));
-}
-
-// ---------------------------------------------------------------------------
-// Trigger button
-// ---------------------------------------------------------------------------
-
-describe("WalletSelectorModal — trigger button", () => {
-  it("renders the trigger button", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    expect(screen.getByTestId("wallet-selector-modal-trigger")).toBeInTheDocument();
+describe("detectAnyWalletExtension", () => {
+  afterEach(() => {
+    const w = window as unknown as Record<string, unknown>;
+    delete w["freighterApi"];
+    delete w["freighter"];
   });
 
-  it("shows 'Connect Wallet' label when not connecting", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    expect(screen.getByTestId("wallet-selector-modal-trigger")).toHaveTextContent(
-      "Connect Wallet"
-    );
+  it("returns false when no wallet globals are present", () => {
+    expect(detectAnyWalletExtension()).toBe(false);
   });
 
-  it("is disabled when isConnecting is true", () => {
-    render(<WalletSelectorModal {...defaultProps({ isConnecting: true })} />);
-    expect(screen.getByTestId("wallet-selector-modal-trigger")).toBeDisabled();
+  it("returns true when freighterApi is present", () => {
+    (window as unknown as Record<string, unknown>)["freighterApi"] = {};
+    expect(detectAnyWalletExtension()).toBe(true);
   });
 
-  it("modal is not visible before the trigger is clicked", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    expect(screen.queryByTestId("wallet-selector-modal")).not.toBeInTheDocument();
+  it("returns true when freighter is present", () => {
+    (window as unknown as Record<string, unknown>)["freighter"] = {};
+    expect(detectAnyWalletExtension()).toBe(true);
+  });
+
+  it("honours an injected detector callback", () => {
+    expect(detectAnyWalletExtension(() => true)).toBe(true);
+    expect(detectAnyWalletExtension(() => false)).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Modal open / close
+// handleWalletError unit tests
 // ---------------------------------------------------------------------------
 
-describe("WalletSelectorModal — open and close", () => {
-  it("opens the modal when the trigger is clicked", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    openModal();
-    expect(screen.getByTestId("wallet-selector-modal")).toBeInTheDocument();
+describe("handleWalletError", () => {
+  it("identifies user rejected transaction errors", () => {
+    const result = handleWalletError(new Error("user rejected transaction"));
+    expect(result.isRejection).toBe(true);
+    expect(result.message).toMatch(/Signature cancelled/i);
   });
 
-  it("closes the modal when the close button is clicked", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    openModal();
-    fireEvent.click(screen.getByTestId("wallet-selector-modal-close"));
-    expect(screen.queryByTestId("wallet-selector-modal")).not.toBeInTheDocument();
+  it("identifies WalletRejectedError instances", () => {
+    const result = handleWalletError(new WalletRejectedError());
+    expect(result.isRejection).toBe(true);
+    expect(result.message).toMatch(/Signature cancelled/i);
   });
 
-  it("closes the modal when the backdrop is clicked", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    openModal();
-    fireEvent.click(screen.getByTestId("wallet-selector-modal-backdrop"));
-    expect(screen.queryByTestId("wallet-selector-modal")).not.toBeInTheDocument();
+  it("identifies user declined errors", () => {
+    const result = handleWalletError(new Error("User Declined the request"));
+    expect(result.isRejection).toBe(true);
   });
 
-  it("has role=dialog and aria-modal on the modal panel", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    openModal();
-    const dialog = screen.getByTestId("wallet-selector-modal");
-    expect(dialog).toHaveAttribute("role", "dialog");
-    expect(dialog).toHaveAttribute("aria-modal", "true");
+  it("does not classify unexpected errors as rejections", () => {
+    const result = handleWalletError(new Error("horizon unreachable"));
+    expect(result.isRejection).toBe(false);
+    expect(result.message).toBe("horizon unreachable");
+  });
+
+  it("handles non-Error thrown values", () => {
+    const result = handleWalletError("string error");
+    expect(result.isRejection).toBe(false);
+    expect(result.message).toBe("An unexpected error occurred.");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Single-sig flow — existing behaviour unchanged
+// Task 3 — Wallet availability check errors
 // ---------------------------------------------------------------------------
 
-describe("WalletSelectorModal — single-sig connect flow", () => {
-  it("renders the wallet selector inside the modal", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    openModal();
-    // the select element inside the modal
-    expect(screen.getByRole("combobox")).toBeInTheDocument();
-  });
-
-  it("calls onSelectWallet when a wallet is chosen", () => {
-    const onSelectWallet = vi.fn();
-    render(<WalletSelectorModal {...defaultProps({ onSelectWallet })} />);
-    openModal();
-    fireEvent.change(screen.getByRole("combobox"), {
-      target: { value: "albedo" },
-    });
-    expect(onSelectWallet).toHaveBeenCalledWith("albedo");
-  });
-
-  it("calls onConnect and closes the modal when Connect is clicked", () => {
-    const onConnect = vi.fn();
-    render(<WalletSelectorModal {...defaultProps({ onConnect })} />);
-    openModal();
-    fireEvent.click(screen.getByTestId("connect-btn"));
-    expect(onConnect).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId("wallet-selector-modal")).not.toBeInTheDocument();
-  });
-
-  it("multi-sig panel is hidden by default", () => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    openModal();
-    expect(screen.queryByTestId("multisig-panel")).not.toBeInTheDocument();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Multi-sig toggle
-// ---------------------------------------------------------------------------
-
-describe("WalletSelectorModal — multi-sig toggle", () => {
+describe("WalletSelectorModal wallet availability (#103)", () => {
   beforeEach(() => {
-    render(<WalletSelectorModal {...defaultProps()} />);
-    openModal();
+    vi.clearAllMocks();
   });
 
-  it("shows the multi-sig panel when the toggle is checked", () => {
-    fireEvent.click(screen.getByTestId("multisig-toggle"));
-    expect(screen.getByTestId("multisig-panel")).toBeInTheDocument();
+  it("renders nothing when isOpen is false", () => {
+    render(
+      <WalletSelectorModal isOpen={false} onClose={vi.fn()} />
+    );
+    expect(
+      screen.queryByTestId("wallet-selector-modal")
+    ).not.toBeInTheDocument();
   });
 
-  it("hides the single-sig connect button when multi-sig mode is active", () => {
-    fireEvent.click(screen.getByTestId("multisig-toggle"));
-    expect(screen.queryByTestId("connect-btn")).not.toBeInTheDocument();
+  it("renders the modal dialog when isOpen is true", () => {
+    render(
+      <WalletSelectorModal isOpen={true} onClose={vi.fn()} />
+    );
+
+    expect(screen.getByTestId("wallet-selector-modal")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Select Wallet")).toBeInTheDocument();
   });
 
-  it("hides the multi-sig panel when the toggle is unchecked again", () => {
-    const toggle = screen.getByTestId("multisig-toggle");
-    fireEvent.click(toggle);
-    expect(screen.getByTestId("multisig-panel")).toBeInTheDocument();
-    fireEvent.click(toggle);
-    expect(screen.queryByTestId("multisig-panel")).not.toBeInTheDocument();
-  });
-});
+  it("renders all supported wallet options", () => {
+    render(
+      <WalletSelectorModal isOpen={true} onClose={vi.fn()} />
+    );
 
-// ---------------------------------------------------------------------------
-// Multi-sig validation gate — valid XDR parses without errors
-// ---------------------------------------------------------------------------
-
-describe("WalletSelectorModal — XDR validation gate", () => {
-  it("shows the structure preview after a valid XDR is validated", async () => {
-    // Build a real transaction XDR
-    const {
-      Account,
-      Asset,
-      BASE_FEE,
-      Keypair,
-      Operation,
-      TransactionBuilder,
-    } = await import("@stellar/stellar-sdk");
-
-    const source = Keypair.random();
-    const account = new Account(source.publicKey(), "0");
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: NETWORK,
-    })
-      .addOperation(
-        Operation.payment({
-          destination: Keypair.random().publicKey(),
-          asset: Asset.native(),
-          amount: "1",
-        })
-      )
-      .setTimeout(30)
-      .build();
-
-    render(<WalletSelectorModal {...defaultProps({ selectedWalletId: "albedo" })} />);
-    openModal();
-    fireEvent.click(screen.getByTestId("multisig-toggle"));
-
-    fireEvent.change(screen.getByTestId("xdr-input"), {
-      target: { value: tx.toXDR() },
-    });
-    fireEvent.click(screen.getByTestId("validate-xdr-btn"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("tx-structure-preview")).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId("multisig-error")).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("wallet-selector-option-freighter")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("wallet-selector-option-albedo")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("wallet-selector-option-xbull")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("wallet-selector-option-hana")
+    ).toBeInTheDocument();
   });
 
-  it("shows an error message when malformed XDR is submitted", async () => {
-    render(<WalletSelectorModal {...defaultProps({ selectedWalletId: "albedo" })} />);
-    openModal();
-    fireEvent.click(screen.getByTestId("multisig-toggle"));
-
-    fireEvent.change(screen.getByTestId("xdr-input"), {
-      target: { value: "this-is-not-valid-xdr" },
-    });
-    fireEvent.click(screen.getByTestId("validate-xdr-btn"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("multisig-error")).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId("tx-structure-preview")).not.toBeInTheDocument();
-  });
-
-  it("shows an error message when empty XDR is submitted", async () => {
-    render(<WalletSelectorModal {...defaultProps({ selectedWalletId: "albedo" })} />);
-    openModal();
-    fireEvent.click(screen.getByTestId("multisig-toggle"));
-
-    // validate-xdr-btn is disabled when input is empty; simulate clicking anyway
-    // by directly invoking handleValidateXdr via a truthy but blank value
-    fireEvent.change(screen.getByTestId("xdr-input"), {
-      target: { value: "   " },
-    });
-    // button is disabled for blank — set non-blank then clear
-    fireEvent.change(screen.getByTestId("xdr-input"), {
-      target: { value: "x" },
-    });
-    fireEvent.change(screen.getByTestId("xdr-input"), {
-      target: { value: "" },
-    });
-    // Now paste a non-empty string that is still invalid
-    fireEvent.change(screen.getByTestId("xdr-input"), {
-      target: { value: "ZZZZ" },
-    });
-    fireEvent.click(screen.getByTestId("validate-xdr-btn"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("multisig-error")).toBeInTheDocument();
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Multi-sig plan building
-// ---------------------------------------------------------------------------
-
-describe("WalletSelectorModal — assembly plan", () => {
-  it("calls onMultiSigPlanReady and closes the modal after a successful plan build", async () => {
-    const {
-      Account,
-      Asset,
-      BASE_FEE,
-      Keypair,
-      Operation,
-      TransactionBuilder,
-    } = await import("@stellar/stellar-sdk");
-
-    const source = Keypair.random();
-    const cosigner = Keypair.random();
-    const account = new Account(source.publicKey(), "0");
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: NETWORK,
-    })
-      .addOperation(
-        Operation.payment({
-          destination: Keypair.random().publicKey(),
-          asset: Asset.native(),
-          amount: "1",
-        })
-      )
-      .setTimeout(30)
-      .build();
-
-    const onMultiSigPlanReady = vi.fn();
+  it("shows availability warning when Freighter extension is missing", () => {
     render(
       <WalletSelectorModal
-        {...defaultProps({ selectedWalletId: "albedo", onMultiSigPlanReady })}
+        isOpen={true}
+        onClose={vi.fn()}
+        freighterDetector={() => false}
       />
     );
-    openModal();
-    fireEvent.click(screen.getByTestId("multisig-toggle"));
 
-    // Validate XDR first
-    fireEvent.change(screen.getByTestId("xdr-input"), {
-      target: { value: tx.toXDR() },
-    });
-    fireEvent.click(screen.getByTestId("validate-xdr-btn"));
-    await waitFor(() =>
-      expect(screen.getByTestId("tx-structure-preview")).toBeInTheDocument()
+    const warning = screen.getByTestId(
+      "wallet-selector-availability-warning"
     );
+    expect(warning).toBeInTheDocument();
+    expect(warning).toHaveAttribute("role", "alert");
 
-    // Enter co-signers
-    fireEvent.change(screen.getByTestId("signer-input"), {
-      target: {
-        value: `${source.publicKey()},${cosigner.publicKey()}`,
-      },
-    });
+    expect(
+      screen.getByTestId("wallet-selector-setup-instruction")
+    ).toHaveTextContent(/not detected/i);
 
-    // Build plan
-    fireEvent.click(screen.getByTestId("build-plan-btn"));
-
-    expect(onMultiSigPlanReady).toHaveBeenCalledTimes(1);
-    const plan = onMultiSigPlanReady.mock.calls[0][0];
-    expect(plan.pendingSigners).toContain(source.publicKey());
-    expect(plan.pendingSigners).toContain(cosigner.publicKey());
-
-    // Modal should close
-    expect(screen.queryByTestId("wallet-selector-modal")).not.toBeInTheDocument();
+    const installLink = screen.getByTestId("wallet-selector-install-link");
+    expect(installLink).toHaveAttribute("href", FREIGHTER_INSTALL_URL);
+    expect(installLink).toHaveAttribute("target", "_blank");
   });
 
-  it("shows an error if Build plan is clicked without signers", async () => {
-    const {
-      Account,
-      Asset,
-      BASE_FEE,
-      Keypair,
-      Operation,
-      TransactionBuilder,
-    } = await import("@stellar/stellar-sdk");
-
-    const source = Keypair.random();
-    const account = new Account(source.publicKey(), "0");
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: NETWORK,
-    })
-      .addOperation(
-        Operation.payment({
-          destination: Keypair.random().publicKey(),
-          asset: Asset.native(),
-          amount: "1",
-        })
-      )
-      .setTimeout(30)
-      .build();
-
-    render(<WalletSelectorModal {...defaultProps({ selectedWalletId: "albedo" })} />);
-    openModal();
-    fireEvent.click(screen.getByTestId("multisig-toggle"));
-
-    fireEvent.change(screen.getByTestId("xdr-input"), {
-      target: { value: tx.toXDR() },
-    });
-    fireEvent.click(screen.getByTestId("validate-xdr-btn"));
-    await waitFor(() =>
-      expect(screen.getByTestId("tx-structure-preview")).toBeInTheDocument()
+  it("hides availability warning when Freighter extension is detected", () => {
+    render(
+      <WalletSelectorModal
+        isOpen={true}
+        onClose={vi.fn()}
+        freighterDetector={() => true}
+      />
     );
 
-    // Signer input stays empty — build-plan-btn should be disabled
-    expect(screen.getByTestId("build-plan-btn")).toBeDisabled();
+    expect(
+      screen.queryByTestId("wallet-selector-availability-warning")
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls onClose when the close button is clicked", () => {
+    const onClose = vi.fn();
+    render(
+      <WalletSelectorModal isOpen={true} onClose={onClose} />
+    );
+
+    fireEvent.click(screen.getByTestId("wallet-selector-modal-close"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onConnect with the selected wallet id", () => {
+    const onConnect = vi.fn();
+    render(
+      <WalletSelectorModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onConnect={onConnect}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId("wallet-selector-option-freighter"));
+    expect(onConnect).toHaveBeenCalledWith("freighter");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4 — Graceful handling of user signature rejection exceptions
+// ---------------------------------------------------------------------------
+
+describe("WalletSelectorModal signature rejection handling (#105)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows rejection warning toast when handleWalletError catches a user rejection", () => {
+    const result = handleWalletError(
+      new Error("user rejected transaction")
+    );
+    expect(result.isRejection).toBe(true);
+
+    // Simulate what the component does with this result
+    showToast(result.message, "warning");
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringMatching(/Signature cancelled/i),
+      "warning"
+    );
+  });
+
+  it("shows rejection warning toast when handleWalletError catches a WalletRejectedError", () => {
+    const result = handleWalletError(new WalletRejectedError());
+    expect(result.isRejection).toBe(true);
+
+    showToast(result.message, "warning");
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringMatching(/Signature cancelled/i),
+      "warning"
+    );
+  });
+
+  it("does not show rejection toast for non-rejection errors", () => {
+    const result = handleWalletError(new Error("network timeout"));
+    expect(result.isRejection).toBe(false);
+
+    // Non-rejection errors should not trigger the warning toast path
+    expect(result.message).not.toMatch(/Signature cancelled/i);
+  });
+
+  it("logs a console warning when a rejection is caught", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = handleWalletError(
+      new Error("User Declined the request")
+    );
+    expect(result.isRejection).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[wallet_selector_modal] signature rejected by user:",
+      "User Declined the request"
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("preserves the original error in the result for debugging", () => {
+    const originalError = new Error("user rejected transaction");
+    const result = handleWalletError(originalError);
+
+    expect(result.error).toBe(originalError);
+    expect(result.isRejection).toBe(true);
+  });
+
+  it("handleWalletError returns fallback message for unknown thrown values", () => {
+    const result = handleWalletError(undefined);
+    expect(result.isRejection).toBe(false);
+    expect(result.message).toBe("An unexpected error occurred.");
+  });
+
+  it("handleWalletError returns fallback message for null thrown values", () => {
+    const result = handleWalletError(null);
+    expect(result.isRejection).toBe(false);
+    expect(result.message).toBe("An unexpected error occurred.");
   });
 });

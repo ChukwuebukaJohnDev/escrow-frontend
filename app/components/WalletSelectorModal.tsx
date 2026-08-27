@@ -1,446 +1,416 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import {
-  useState,
-  useCallback,
-  useId,
-  type KeyboardEvent,
-} from "react";
-import { SUPPORTED_WALLETS, type SupportedWalletId } from "@/app/context/WalletContext";
+  checkFreighterAvailability,
+  FREIGHTER_INSTALL_URL,
+  isFreighterUserRejected,
+} from "@/app/lib/freighter_connector";
 import {
-  useWalletMultiSigAssembly,
-  WalletMultiSigParseError,
-  type MultiSigAssemblyPlan,
-  type MultiSigTransactionStructure,
-} from "@/app/hooks/useWalletMultiSigAssembly";
-import ButtonSpinner from "@/app/components/ButtonSpinner";
+  isWalletRejectedError,
+} from "@/app/lib/errors";
+import { useToast } from "@/app/context/ToastContext";
+import {
+  SUPPORTED_WALLETS,
+  type SupportedWalletId,
+} from "@/app/context/WalletContext";
+import {
+  checkNetworkMismatch,
+  buildWalletSelectorMismatchMessage,
+  subscribeToModalWalletLoading,
+  withModalWalletLoader,
+  walletSelectorStore,
+  type WalletCachedKey,
+} from "@/app/lib/wallet_selector_modal";
 
 // ---------------------------------------------------------------------------
-// Props
+// Types
 // ---------------------------------------------------------------------------
+
+export type WalletSelectorModalStatus =
+  | "idle"
+  | "connecting"
+  | "signing"
+  | "rejected"
+  | "error"
+  | "unavailable";
+
+export type WalletSelectorWalletId = SupportedWalletId;
 
 export interface WalletSelectorModalProps {
-  /** Currently selected wallet. */
-  selectedWalletId: SupportedWalletId;
-  /** Called when the user changes the wallet selector. */
-  onSelectWallet: (id: SupportedWalletId) => void;
-  /** Called to initiate a single-sig wallet connection. */
-  onConnect: () => void;
-  /** True while a connection is in progress. */
-  isConnecting?: boolean;
-  /**
-   * Network passphrase — required for multi-sig XDR parsing.
-   * Defaults to Testnet if omitted.
-   */
-  networkPassphrase?: string;
-  /**
-   * Called when a multi-sig assembly plan has been successfully built and
-   * the user confirms it.  The modal passes back the plan so the caller can
-   * collect co-signer signatures and then assemble the final XDR.
-   */
-  onMultiSigPlanReady?: (plan: MultiSigAssemblyPlan) => void;
+  /** Whether the modal is currently visible. */
+  isOpen: boolean;
+  /** Called when the user requests the modal be closed. */
+  onClose: () => void;
+  /** Called when a wallet is successfully connected. */
+  onConnect?: (walletId: SupportedWalletId) => void;
+  /** Called when the user disconnects the active wallet. */
+  onDisconnect?: () => void;
+  /** The currently connected wallet address (null when disconnected). */
+  activeAddress?: string | null;
+  /** The currently selected wallet provider ID. */
+  selectedWalletId?: SupportedWalletId;
+  /** The wallet's current network passphrase (for mismatch detection). */
+  walletNetwork?: string | null;
+  /** The expected app network passphrase. */
+  appNetwork?: string;
+  /** Whether a connect/disconnect operation is currently in progress. */
+  isLoading?: boolean;
+  /** Current wallet provider error message (null when no error). */
+  errorMessage?: string | null;
+  /** Optional detector override for Freighter availability (useful in tests). */
+  freighterDetector?: () => boolean;
+  /** Optional detector override for window globals (useful in tests). */
+  windowDetector?: () => boolean;
+  className?: string;
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Helpers
 // ---------------------------------------------------------------------------
 
-const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
+/**
+ * Detects if any supported browser wallet extension is installed.
+ * Accepts optional detector overrides for test environments.
+ */
+export function detectAnyWalletExtension(
+  detector?: () => boolean
+): boolean {
+  if (detector) {
+    return detector();
+  }
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const w = window as unknown as Record<string, unknown>;
+  return !!(w["freighterApi"] || w["freighter"]);
+}
 
-function StructurePreview({
-  structure,
-}: {
-  structure: MultiSigTransactionStructure;
-}) {
-  return (
-    <dl
-      data-testid="tx-structure-preview"
-      className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-400"
-    >
-      <dt className="font-medium text-gray-300">Source</dt>
-      <dd className="font-mono truncate" title={structure.sourceAccount}>
-        {structure.sourceAccount
-          ? `${structure.sourceAccount.slice(0, 6)}…${structure.sourceAccount.slice(-4)}`
-          : "—"}
-      </dd>
-      {structure.fee ? (
-        <>
-          <dt className="font-medium text-gray-300">Fee</dt>
-          <dd>{structure.fee} stroops</dd>
-        </>
-      ) : null}
-      <dt className="font-medium text-gray-300">Operations</dt>
-      <dd>{structure.operationCount}</dd>
-      <dt className="font-medium text-gray-300">Signatures</dt>
-      <dd>{structure.signatureCount}</dd>
-    </dl>
-  );
+/**
+ * Catches and normalises wallet interaction errors. Returns a structured
+ * result so the caller can decide how to surface the error to the user.
+ */
+export function handleWalletError(err: unknown): {
+  isRejection: boolean;
+  message: string;
+  error: unknown;
+} {
+  if (isFreighterUserRejected(err) || isWalletRejectedError(err)) {
+    const originalMessage =
+      err instanceof Error ? err.message : "user rejected transaction";
+    console.warn(
+      "[wallet_selector_modal] signature rejected by user:",
+      originalMessage
+    );
+    return {
+      isRejection: true,
+      message:
+        "Signature cancelled — you rejected the request in your wallet.",
+      error: err,
+    };
+  }
+
+  const message =
+    err instanceof Error ? err.message : "An unexpected error occurred.";
+  return {
+    isRejection: false,
+    message,
+    error: err,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-/**
- * WalletSelectorModal
- *
- * A modal dialog for wallet selection supporting two modes:
- *
- * - **Single-sig** (default): presents a wallet picker and a connect button.
- *   Identical to the existing Navbar inline behaviour, no behaviour change
- *   for single-sig users.
- *
- * - **Multi-sig**: revealed via an optional toggle. Accepts a base transaction
- *   XDR and a list of required co-signer public keys; validates the XDR by
- *   parsing it through the Stellar SDK, then builds and returns an assembly
- *   plan via `onMultiSigPlanReady`.
- *
- * Uses the unified `useWalletMultiSigAssembly` hook so all wallet types are
- * handled through a single interface.
- */
 export default function WalletSelectorModal({
-  selectedWalletId,
-  onSelectWallet,
+  isOpen,
+  onClose,
   onConnect,
-  isConnecting = false,
-  networkPassphrase = TESTNET_PASSPHRASE,
-  onMultiSigPlanReady,
+  onDisconnect,
+  activeAddress = null,
+  selectedWalletId = "freighter",
+  walletNetwork = null,
+  appNetwork = "Test SDF Network ; September 2015",
+  isLoading = false,
+  errorMessage = null,
+  freighterDetector,
+  className = "",
 }: WalletSelectorModalProps) {
-  // ---- modal open/close state ----
-  const [isOpen, setIsOpen] = useState(false);
+  const { showToast } = useToast();
+  const [status, setStatus] = useState<WalletSelectorModalStatus>("idle");
+  const [modalLoading, setModalLoading] = useState(false);
 
-  // ---- multi-sig toggle ----
-  const [multiSigMode, setMultiSigMode] = useState(false);
-
-  // ---- multi-sig XDR input + parse state ----
-  const [xdrInput, setXdrInput] = useState("");
-  const [signerInput, setSignerInput] = useState(""); // comma-separated public keys
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [structurePreview, setStructurePreview] =
-    useState<MultiSigTransactionStructure | null>(null);
-  const [isParsing, setIsParsing] = useState(false);
-
-  const openModal = useCallback(() => setIsOpen(true), []);
-  const closeModal = useCallback(() => {
-    setIsOpen(false);
-    setMultiSigMode(false);
-    setXdrInput("");
-    setSignerInput("");
-    setParseError(null);
-    setStructurePreview(null);
+  // Subscribe to loading-state changes from the loader wrapper
+  useEffect(() => {
+    return subscribeToModalWalletLoading((loading) => {
+      setModalLoading(loading);
+    });
   }, []);
 
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget) closeModal();
+  const effectiveLoading = isLoading || modalLoading || status === "connecting" || status === "signing";
+
+  // Network mismatch detection
+  const networkMismatch = checkNetworkMismatch(
+    walletNetwork ?? "",
+    appNetwork,
+  );
+
+  const mismatchMessage = buildWalletSelectorMismatchMessage(
+    selectedWalletId,
+    walletNetwork ?? "",
+    appNetwork,
+  );
+
+  // Wallet availability — computed synchronously during render when the
+  // modal opens.  `checkFreighterAvailability` is a pure sync call, so
+  // there is no need for an effect (and it avoids the
+  // react-hooks/set-state-in-effect lint rule).
+  const availability = isOpen
+    ? checkFreighterAvailability(freighterDetector)
+    : null;
+
+  // Persistent caching: persist the cached key when the wallet connects
+  useEffect(() => {
+    if (activeAddress) {
+      const cachedKey: WalletCachedKey = {
+        walletId: selectedWalletId,
+        address: activeAddress,
+        networkPassphrase: walletNetwork ?? "",
+        connectedAt: Date.now(),
+      };
+      walletSelectorStore.setCachedKey(cachedKey);
+    }
+  }, [activeAddress, selectedWalletId, walletNetwork]);
+
+  const handleConnect = useCallback(
+    async (walletId: SupportedWalletId) => {
+      void withModalWalletLoader(async () => {
+        setStatus("connecting");
+
+        try {
+          onConnect?.(walletId);
+          setStatus("idle");
+        } catch (err) {
+          const result = handleWalletError(err);
+
+          if (result.isRejection) {
+            setStatus("rejected");
+            showToast(result.message, "warning");
+          } else {
+            setStatus("error");
+            showToast(
+              "Failed to connect wallet. Please try again.",
+              "error"
+            );
+          }
+        }
+      });
     },
-    [closeModal]
+    [onConnect, showToast]
   );
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === "Escape") closeModal();
-    },
-    [closeModal]
-  );
+  const handleDisconnect = useCallback(() => {
+    void withModalWalletLoader(async () => {
+      onDisconnect?.();
+    });
+    onClose();
+  }, [onDisconnect, onClose]);
 
-  const multiSigHook = useWalletMultiSigAssembly(
-    networkPassphrase,
-    selectedWalletId
-  );
-
-  // ---- unique IDs for accessibility ----
-  const modalTitleId = useId();
-  const walletSelectId = useId();
-  const xdrInputId = useId();
-  const signerInputId = useId();
-
-  // ---- validate XDR on demand ----
-  const handleValidateXdr = useCallback(() => {
-    if (!xdrInput.trim()) {
-      setParseError("Paste a base-64 transaction XDR to validate.");
-      setStructurePreview(null);
-      return;
-    }
-    setIsParsing(true);
-    setParseError(null);
-    setStructurePreview(null);
-    try {
-      const structure = multiSigHook.parseStructure(xdrInput.trim());
-      setStructurePreview(structure);
-    } catch (err) {
-      setParseError(
-        err instanceof WalletMultiSigParseError || err instanceof Error
-          ? err.message
-          : "Failed to parse transaction XDR."
-      );
-    } finally {
-      setIsParsing(false);
-    }
-  }, [xdrInput, multiSigHook]);
-
-  // ---- build assembly plan ----
-  const handleBuildPlan = useCallback(() => {
-    if (!structurePreview) {
-      setParseError("Validate the transaction XDR first.");
-      return;
-    }
-    const rawKeys = signerInput
-      .split(",")
-      .map((k) => k.trim())
-      .filter(Boolean);
-    if (rawKeys.length === 0) {
-      setParseError("Enter at least one co-signer public key.");
-      return;
-    }
-    setParseError(null);
-    try {
-      const plan = multiSigHook.planAssembly(xdrInput.trim(), rawKeys);
-      onMultiSigPlanReady?.(plan);
-      closeModal();
-    } catch (err) {
-      setParseError(
-        err instanceof WalletMultiSigParseError || err instanceof Error
-          ? err.message
-          : "Failed to build assembly plan."
-      );
-    }
-  }, [
-    structurePreview,
-    signerInput,
-    xdrInput,
-    multiSigHook,
-    onMultiSigPlanReady,
-    closeModal,
-  ]);
-
-  // ---- single-sig connect ----
-  const handleConnect = useCallback(() => {
-    onConnect();
-    closeModal();
-  }, [onConnect, closeModal]);
-
-  const focusRing =
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 rounded";
+  if (!isOpen) return null;
 
   return (
-    <>
-      {/* Trigger button */}
-      <button
-        type="button"
-        data-testid="wallet-selector-modal-trigger"
-        onClick={openModal}
-        disabled={isConnecting}
-        className={`bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition ${focusRing}`}
+    <div
+      data-testid="wallet-selector-modal"
+      role="dialog"
+      aria-label="Select Wallet"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 ${className}`}
+    >
+      <div
+        data-testid="wallet-selector-modal-content"
+        className="bg-surface rounded-xl shadow-xl max-w-md w-full mx-4 p-6"
       >
-        {isConnecting ? (
-          <span className="flex items-center gap-2">
-            <ButtonSpinner className="h-3.5 w-3.5" />
-            Connecting…
-          </span>
-        ) : (
-          "Connect Wallet"
-        )}
-      </button>
-
-      {/* Modal */}
-      {isOpen && (
-        <div
-          role="presentation"
-          data-testid="wallet-selector-modal-backdrop"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={handleBackdropClick}
-          onKeyDown={handleKeyDown}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={modalTitleId}
-            data-testid="wallet-selector-modal"
-            className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-6 flex flex-col gap-5"
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-primary">
+            Select Wallet
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            data-testid="wallet-selector-modal-close"
+            aria-label="Close"
+            className="text-secondary hover:text-primary transition-colors"
           >
-            {/* Header */}
+            ✕
+          </button>
+        </div>
+
+        {/* Network mismatch warning bar */}
+        {networkMismatch.mismatched && mismatchMessage && (
+          <div
+            data-testid="wallet-selector-network-warning"
+            className="bg-warning/40 border border-warning rounded-lg px-4 py-3 mb-4 text-warning-soft text-sm"
+            role="alert"
+          >
+            {mismatchMessage}
+          </div>
+        )}
+
+        {/* Wallet availability warning */}
+        {availability && !availability.available && (
+          <div
+            data-testid="wallet-selector-availability-warning"
+            role="alert"
+            className="bg-warning/40 border border-warning rounded-lg px-4 py-3 mb-4 text-warning-soft text-sm"
+          >
+            <p data-testid="wallet-selector-setup-instruction">
+              {availability.setupInstruction}
+            </p>
+            <a
+              href={FREIGHTER_INSTALL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="wallet-selector-install-link"
+              className="underline font-medium hover:opacity-80"
+            >
+              Install Freighter
+            </a>
+          </div>
+        )}
+
+        {/* Error message from props */}
+        {errorMessage && (
+          <div
+            data-testid="wallet-selector-error-message"
+            className="bg-danger/20 border border-danger rounded-lg px-4 py-3 mb-4 text-danger-soft text-sm text-center"
+            role="alert"
+          >
+            {errorMessage}
+          </div>
+        )}
+
+        {/* Rejection warning */}
+        {status === "rejected" && (
+          <div
+            data-testid="wallet-selector-rejection-warning"
+            role="alert"
+            className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 mb-4 text-sm text-yellow-300"
+          >
+            Signature cancelled — you rejected the request in your wallet.
+          </div>
+        )}
+
+        {/* Error warning */}
+        {status === "error" && (
+          <div
+            data-testid="wallet-selector-error-warning"
+            role="alert"
+            className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 mb-4 text-sm text-red-300"
+          >
+            Failed to connect wallet. Please try again.
+          </div>
+        )}
+
+        {/* Loading spinner overlay */}
+        {effectiveLoading && (
+          <div
+            data-testid="wallet-selector-spinner"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 rounded-lg"
+          >
+            <div className="flex flex-col items-center space-y-2">
+              <svg
+                className="h-8 w-8 text-indigo-500 animate-spin"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              <span className="text-sm text-gray-300">
+                Wallet operation in progress…
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Active wallet info */}
+        {activeAddress && (
+          <div
+            data-testid="wallet-selector-active-info"
+            className="mb-4 p-3 border border-white/10 rounded-lg"
+          >
             <div className="flex items-center justify-between">
-              <h2
-                id={modalTitleId}
-                className="text-lg font-semibold text-gray-100"
-              >
-                Connect Wallet
-              </h2>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-sm text-gray-300 font-mono">
+                  {activeAddress.slice(0, 4)}...{activeAddress.slice(-4)}
+                </span>
+              </div>
               <button
-                type="button"
-                data-testid="wallet-selector-modal-close"
-                onClick={closeModal}
-                aria-label="Close wallet selector"
-                className={`text-gray-400 hover:text-gray-100 transition text-xl leading-none ${focusRing}`}
+                onClick={handleDisconnect}
+                disabled={effectiveLoading}
+                className="text-sm text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                data-testid="wallet-selector-disconnect-btn"
               >
-                ✕
+                Disconnect
               </button>
             </div>
+          </div>
+        )}
 
-            {/* Wallet picker */}
-            <div className="flex flex-col gap-2">
-              <label
-                htmlFor={walletSelectId}
-                className="text-sm font-medium text-gray-300"
-              >
-                Wallet provider
-              </label>
-              <select
-                id={walletSelectId}
-                value={selectedWalletId}
-                onChange={(e) =>
-                  onSelectWallet(e.target.value as SupportedWalletId)
-                }
-                disabled={isConnecting}
-                className={`bg-gray-800 border border-gray-700 text-sm text-gray-200 rounded-lg px-3 py-2 w-full ${focusRing}`}
-              >
-                {SUPPORTED_WALLETS.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* Wallet list */}
+        <div className="space-y-2" data-testid="wallet-selector-list">
+          {SUPPORTED_WALLETS.map((wallet) => {
+            const isSelected = wallet.id === selectedWalletId;
+            const isConnected =
+              activeAddress !== null && wallet.id === selectedWalletId;
 
-            {/* Multi-sig toggle */}
-            <label className="flex items-center gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                data-testid="multisig-toggle"
-                checked={multiSigMode}
-                onChange={(e) => {
-                  setMultiSigMode(e.target.checked);
-                  setParseError(null);
-                  setStructurePreview(null);
-                  setXdrInput("");
-                  setSignerInput("");
-                }}
-                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-400"
-              />
-              <span className="text-sm text-gray-300">
-                Multi-signature transaction
-              </span>
-            </label>
-
-            {/* Multi-sig panel */}
-            {multiSigMode && (
-              <div
-                data-testid="multisig-panel"
-                className="flex flex-col gap-4 border border-gray-700 rounded-lg p-4 bg-gray-800/50"
+            return (
+              <button
+                key={wallet.id}
+                type="button"
+                data-testid={`wallet-selector-option-${wallet.id}`}
+                onClick={() => handleConnect(wallet.id)}
+                disabled={effectiveLoading}
+                data-selected={isSelected}
+                data-connected={isConnected}
+                className={`w-full text-left px-4 py-3 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isSelected
+                    ? "border-indigo-500 bg-indigo-600/20 text-white"
+                    : "border-white/10 hover:border-white/20 hover:bg-white/5 text-primary"
+                }`}
               >
-                {/* XDR input */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor={xdrInputId}
-                    className="text-xs font-medium text-gray-300"
-                  >
-                    Base transaction XDR
-                  </label>
-                  <textarea
-                    id={xdrInputId}
-                    data-testid="xdr-input"
-                    value={xdrInput}
-                    onChange={(e) => {
-                      setXdrInput(e.target.value);
-                      setParseError(null);
-                      setStructurePreview(null);
-                    }}
-                    rows={3}
-                    placeholder="Paste the base-64 transaction XDR…"
-                    className={`bg-gray-900 border border-gray-700 text-xs font-mono text-gray-200 rounded-lg px-3 py-2 resize-none w-full ${focusRing}`}
-                  />
-                  <button
-                    type="button"
-                    data-testid="validate-xdr-btn"
-                    onClick={handleValidateXdr}
-                    disabled={isParsing || !xdrInput.trim()}
-                    className={`self-start mt-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition ${focusRing}`}
-                  >
-                    {isParsing ? (
-                      <span className="flex items-center gap-1.5">
-                        <ButtonSpinner className="h-3 w-3" />
-                        Validating…
-                      </span>
-                    ) : (
-                      "Validate XDR"
-                    )}
-                  </button>
-                  {/* Structure preview */}
-                  {structurePreview && (
-                    <StructurePreview structure={structurePreview} />
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">
+                    {wallet.label}
+                  </span>
+                  {isConnected && (
+                    <span
+                      data-testid="wallet-selector-connected-badge"
+                      className="text-xs text-green-400"
+                    >
+                      Connected
+                    </span>
                   )}
                 </div>
-
-                {/* Signer keys input */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor={signerInputId}
-                    className="text-xs font-medium text-gray-300"
-                  >
-                    Co-signer public keys{" "}
-                    <span className="text-gray-500">(comma-separated)</span>
-                  </label>
-                  <input
-                    id={signerInputId}
-                    data-testid="signer-input"
-                    type="text"
-                    value={signerInput}
-                    onChange={(e) => {
-                      setSignerInput(e.target.value);
-                      setParseError(null);
-                    }}
-                    placeholder="G…, G…"
-                    className={`bg-gray-900 border border-gray-700 text-xs font-mono text-gray-200 rounded-lg px-3 py-2 w-full ${focusRing}`}
-                  />
-                </div>
-
-                {/* Parse / plan error */}
-                {parseError && (
-                  <p
-                    role="alert"
-                    data-testid="multisig-error"
-                    className="text-xs text-red-400"
-                  >
-                    {parseError}
-                  </p>
-                )}
-
-                {/* Build plan button */}
-                <button
-                  type="button"
-                  data-testid="build-plan-btn"
-                  onClick={handleBuildPlan}
-                  disabled={!structurePreview || !signerInput.trim()}
-                  className={`bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition ${focusRing}`}
-                >
-                  Build assembly plan
-                </button>
-              </div>
-            )}
-
-            {/* Single-sig connect footer */}
-            {!multiSigMode && (
-              <button
-                type="button"
-                data-testid="connect-btn"
-                onClick={handleConnect}
-                disabled={isConnecting}
-                className={`bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition w-full ${focusRing}`}
-              >
-                {isConnecting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <ButtonSpinner className="h-3.5 w-3.5" />
-                    Connecting…
-                  </span>
-                ) : (
-                  "Connect"
-                )}
               </button>
-            )}
-          </div>
+            );
+          })}
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 }
