@@ -1,83 +1,181 @@
 "use client";
 
-import SignatureTimeoutFeeWarningBanner from "./SignatureTimeoutFeeWarningBanner";
+import { useEffect, useState } from "react";
+import { useWallet } from "@/app/context/WalletContext";
+import { NETWORK_PASSPHRASE } from "@/app/lib/contract";
 import {
-  inspectSignatureFee,
-  DEFAULT_SIGNATURE_FEE_LIMIT_STROOPS,
-  type SignatureTimeoutSimulationResult,
-} from "@/app/lib/signature_timeout_alert";
+  createStellarEnvelopeParser,
+  logWalletWarning,
+  parseMultiSigEnvelope,
+  type WalletMultiSigSigner,
+} from "@/app/lib/wallet_state_context";
+import { useAlbedoMultiSigAssembly } from "@/app/hooks/useAlbedoMultiSigAssembly";
+import { useLedgerMultiSigAssembly } from "@/app/hooks/useLedgerMultiSigAssembly";
+import { withWalletLoader } from "@/app/lib/wallet_state_context";
+import ButtonSpinner from "./ButtonSpinner";
 
 export interface SignatureTimeoutAlertProps {
-  /** True once the signature clock has elapsed without a signature. */
-  timedOut?: boolean;
-  /** Timeout bound in milliseconds, used in the timeout copy. */
-  timeoutMs?: number;
-  /** Simulation result behind the request, inspected for fee warnings. */
-  simulation?: SignatureTimeoutSimulationResult | null;
-  /** Override the default fee limit (stroops). */
-  feeLimitStroops?: number;
-  /** Renders a retry action when provided. */
-  onRetry?: () => void;
+  error?: unknown;
+  isOpen?: boolean;
+  transactionId?: string;
+  transactionXdr?: string;
+  signers?: WalletMultiSigSigner[];
+  onRetry?: () => Promise<void> | void;
+  onDismiss?: () => void;
   className?: string;
 }
 
-const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page";
-
 /**
- * Displays the transaction signature timeout notice, together with a fee
- * warning banner derived from the simulation result that produced the
- * transaction. Renders nothing when the request has not timed out and the
- * simulated fee is within standard bounds.
+ * Displays a recoverable wallet-signature timeout and the diagnostics needed
+ * to continue a multisig flow without hiding a network mismatch.
  */
 export default function SignatureTimeoutAlert({
-  timedOut = false,
-  timeoutMs,
-  simulation = null,
-  feeLimitStroops = DEFAULT_SIGNATURE_FEE_LIMIT_STROOPS,
+  error,
+  isOpen = false,
+  transactionId,
+  transactionXdr,
+  signers = [],
   onRetry,
+  onDismiss,
   className = "",
 }: SignatureTimeoutAlertProps) {
-  const feeState = inspectSignatureFee(simulation, feeLimitStroops);
+  const {
+    networkMismatchMessage,
+    selectedWalletId,
+    assembleMultiSigTransaction,
+    signatureTimeoutError,
+    signatureTimeoutXdr,
+    clearSignatureTimeout,
+  } = useWallet();
+  const albedoAssembly = useAlbedoMultiSigAssembly(NETWORK_PASSPHRASE);
+  const ledgerAssembly = useLedgerMultiSigAssembly(NETWORK_PASSPHRASE);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [parseMessage, setParseMessage] = useState<string | null>(null);
 
-  if (!timedOut && !feeState.hasWarning) {
-    return null;
+  const activeError = error ?? signatureTimeoutError;
+  const activeTransactionXdr = transactionXdr ?? signatureTimeoutXdr ?? undefined;
+  const hasTimeout =
+    isOpen ||
+    (activeError instanceof Error &&
+      activeError.name === "WalletSignatureTimeoutError");
+
+  useEffect(() => {
+    if (!hasTimeout && !networkMismatchMessage) return;
+
+    logWalletWarning("SIGNATURE TIMEOUT ALERT", "Wallet signature requires attention", {
+      err: activeError,
+      txId: transactionId,
+      phase: "error",
+    });
+  }, [activeError, hasTimeout, networkMismatchMessage, transactionId]);
+
+  useEffect(() => {
+    if (!activeTransactionXdr) {
+      setParseMessage(null);
+      return;
+    }
+
+    try {
+      parseMultiSigEnvelope(activeTransactionXdr, {
+        parseEnvelopeXdr: createStellarEnvelopeParser(NETWORK_PASSPHRASE),
+      });
+      setParseMessage(null);
+    } catch (parseError) {
+      setParseMessage(
+        parseError instanceof Error ? parseError.message : String(parseError)
+      );
+    }
+  }, [activeTransactionXdr]);
+
+  if (!hasTimeout && !networkMismatchMessage) return null;
+
+  async function retry() {
+    if (!onRetry || isRetrying) return;
+    setIsRetrying(true);
+    try {
+      await withWalletLoader(async () => {
+        await onRetry();
+      });
+    } catch (retryError) {
+      logWalletWarning("SIGNATURE RETRY FAILED", "Wallet signature retry failed", {
+        err: retryError,
+        txId: transactionId,
+        phase: "error",
+      });
+    } finally {
+      setIsRetrying(false);
+    }
+  }
+
+  async function assemble() {
+    if (!activeTransactionXdr || signers.length === 0) return;
+    try {
+      const assembly =
+        selectedWalletId === "albedo" ? albedoAssembly : ledgerAssembly;
+      assembly.parseStructure(activeTransactionXdr);
+      const splits = signers.map((signer) => ({
+        baseXdr: activeTransactionXdr,
+        signer,
+        signedXdr: activeTransactionXdr,
+      }));
+      await assembleMultiSigTransaction(splits);
+    } catch (assemblyError) {
+      logWalletWarning("MULTISIG ASSEMBLY FAILED", "Could not validate transaction signatures", {
+        err: assemblyError,
+        txId: transactionId,
+        phase: "error",
+      });
+    }
   }
 
   return (
-    <div
+    <section
+      role="alert"
       data-testid="signature-timeout-alert"
-      data-timed-out={timedOut ? "true" : "false"}
-      data-fee-severity={feeState.severity}
-      className={`flex flex-col gap-3 ${className}`}
+      className={`border border-warning-soft/40 bg-warning-soft/10 px-4 py-3 text-sm text-text-primary ${className}`}
     >
-      {timedOut && (
-        <div
-          data-testid="signature-timeout-notice"
-          role="alert"
-          className="bg-danger/30 border border-danger px-4 py-3 rounded-lg text-danger-soft text-sm"
-        >
-          <span aria-hidden="true">⏱</span>{" "}
-          {timeoutMs !== undefined
-            ? `Signature request timed out after ${timeoutMs}ms. The operation was aborted.`
-            : "Signature request timed out. The operation was aborted."}
-        </div>
+      {networkMismatchMessage && (
+        <p data-testid="signature-timeout-network-warning" className="mb-2 font-medium text-warning-soft">
+          {networkMismatchMessage}
+        </p>
       )}
-
-      <SignatureTimeoutFeeWarningBanner
-        simulation={simulation}
-        feeLimitStroops={feeLimitStroops}
-      />
-
-      {timedOut && onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className={`self-start bg-accent hover:bg-accent-hover text-text-primary text-sm font-medium px-4 py-2 rounded-lg transition-colors ${focusRing}`}
-        >
-          Retry signature
-        </button>
+      {hasTimeout && (
+        <>
+          <h2 className="font-semibold">Signature request timed out</h2>
+          <p className="mt-1 text-text-muted">
+            The wallet did not return a signature. Check the selected wallet and try again.
+          </p>
+          {parseMessage && (
+            <p data-testid="signature-timeout-transaction-error" className="mt-2 text-danger-soft">
+              Transaction structure could not be parsed: {parseMessage}
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {onRetry && (
+              <button type="button" onClick={retry} disabled={isRetrying} data-testid="signature-timeout-retry">
+                {isRetrying ? <ButtonSpinner className="h-4 w-4" /> : "Retry signature"}
+              </button>
+            )}
+            {activeTransactionXdr && signers.length > 0 && (
+              <button type="button" onClick={assemble} data-testid="signature-timeout-assemble">
+                Validate multisig
+              </button>
+            )}
+            {onDismiss && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearSignatureTimeout();
+                  onDismiss?.();
+                }}
+                data-testid="signature-timeout-dismiss"
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+        </>
       )}
-    </div>
+    </section>
   );
 }
