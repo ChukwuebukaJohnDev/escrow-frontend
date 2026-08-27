@@ -1,6 +1,22 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+// SignatureTimeoutAlert pulls in WalletContext, which loads the Stellar
+// Wallets Kit at module scope. Stubbing the context keeps this suite focused
+// on fee inspection and independent of the wallet SDK import chain.
+vi.mock("@/app/context/WalletContext", () => ({
+  useWallet: () => ({
+    networkMismatchMessage: null,
+    selectedWalletId: "freighter",
+    assembleMultiSigTransaction: async () => ({
+      uniqueSigners: 0,
+      splitsValidated: 0,
+    }),
+    signatureTimeoutError: null,
+    signatureTimeoutXdr: null,
+    clearSignatureTimeout: () => {},
+  }),
+}));
 
 import SignatureTimeoutAlert from "@/app/components/SignatureTimeoutAlert";
 import SignatureTimeoutFeeWarningBanner from "@/app/components/SignatureTimeoutFeeWarningBanner";
@@ -340,7 +356,9 @@ describe("SignatureTimeoutFeeWarningBanner", () => {
   });
 });
 
-describe("SignatureTimeoutAlert", () => {
+// The alert component itself is owned by the multisig timeout feature; these
+// tests cover only the fee-inspection behaviour wired into it.
+describe("SignatureTimeoutAlert — fee inspection", () => {
   it("renders nothing when there is no timeout and no fee warning", () => {
     const { container } = render(
       <SignatureTimeoutAlert simulation={{ minResourceFee: 100 }} />
@@ -348,45 +366,41 @@ describe("SignatureTimeoutAlert", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows the fee warning banner even before a timeout", () => {
+  it("renders on a fee warning alone, with no timeout", () => {
     render(
       <SignatureTimeoutAlert simulation={{ minResourceFee: LIMIT * 2 }} />
     );
+    expect(screen.getByTestId("signature-timeout-alert")).toBeInTheDocument();
     expect(screen.getByTestId(BANNER)).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("signature-timeout-notice")
-    ).not.toBeInTheDocument();
   });
 
-  it("shows the timeout notice once the clock has elapsed", () => {
-    render(<SignatureTimeoutAlert timedOut timeoutMs={60_000} />);
-    const notice = screen.getByTestId("signature-timeout-notice");
-    expect(notice.textContent).toContain("timed out after 60000ms");
-  });
-
-  it("uses generic timeout copy when no duration is given", () => {
-    render(<SignatureTimeoutAlert timedOut />);
-    expect(
-      screen.getByTestId("signature-timeout-notice").textContent
-    ).toContain("Signature request timed out.");
-  });
-
-  it("shows both the timeout notice and the fee warning together", () => {
+  it("shows the fee banner alongside the timeout notice", () => {
     render(
       <SignatureTimeoutAlert
-        timedOut
-        timeoutMs={30_000}
+        isOpen
         simulation={{ minResourceFee: LIMIT * 5 }}
       />
     );
-    expect(screen.getByTestId("signature-timeout-notice")).toBeInTheDocument();
+    expect(
+      screen.getByText("Signature request timed out")
+    ).toBeInTheDocument();
     expect(screen.getByTestId(BANNER)).toBeInTheDocument();
+  });
+
+  it("shows the timeout notice with no banner when the fee is in bounds", () => {
+    render(
+      <SignatureTimeoutAlert isOpen simulation={{ minResourceFee: 100 }} />
+    );
+    expect(
+      screen.getByText("Signature request timed out")
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId(BANNER)).not.toBeInTheDocument();
   });
 
   it("exposes the fee severity on the alert wrapper", () => {
     render(
       <SignatureTimeoutAlert
-        timedOut
+        isOpen
         simulation={{ minResourceFee: LIMIT * 5 }}
       />
     );
@@ -396,33 +410,32 @@ describe("SignatureTimeoutAlert", () => {
     );
   });
 
-  it("exposes the timed-out flag on the alert wrapper", () => {
-    render(
-      <SignatureTimeoutAlert simulation={{ minResourceFee: LIMIT * 5 }} />
-    );
+  it("reports a severity of none when no simulation is supplied", () => {
+    render(<SignatureTimeoutAlert isOpen />);
     expect(screen.getByTestId("signature-timeout-alert")).toHaveAttribute(
-      "data-timed-out",
-      "false"
+      "data-fee-severity",
+      "none"
     );
   });
 
-  it("renders a retry button after a timeout and invokes the handler", async () => {
-    const user = userEvent.setup();
-    const onRetry = vi.fn();
-    render(<SignatureTimeoutAlert timedOut onRetry={onRetry} />);
-    await user.click(screen.getByRole("button", { name: "Retry signature" }));
-    expect(onRetry).toHaveBeenCalledOnce();
-  });
-
-  it("does not render the retry button without a timeout", () => {
+  it("respects a custom fee limit", () => {
     render(
       <SignatureTimeoutAlert
-        simulation={{ minResourceFee: LIMIT * 5 }}
-        onRetry={() => {}}
+        simulation={{ minResourceFee: 500 }}
+        feeLimitStroops={400}
       />
     );
-    expect(
-      screen.queryByRole("button", { name: "Retry signature" })
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId(BANNER)).toHaveAttribute(
+      "data-severity",
+      "exceeded"
+    );
+  });
+
+  it("surfaces a failed simulation as an error banner", () => {
+    render(<SignatureTimeoutAlert simulation={{ error: "trap" }} />);
+    expect(screen.getByTestId(BANNER)).toHaveAttribute(
+      "data-severity",
+      "error"
+    );
   });
 });
