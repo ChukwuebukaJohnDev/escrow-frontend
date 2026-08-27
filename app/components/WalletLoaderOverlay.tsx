@@ -13,24 +13,18 @@ import ButtonSpinner from "./ButtonSpinner";
  *
  * Subscribes to both the wallet_state_context loader and the AlbedoLoadingManager
  * so Albedo popup operations trigger the same overlay as other wallet operations.
- *
- * Each source is tracked independently to prevent one source's completion
- * from hiding the overlay while another source is still loading (e.g. during
- * transaction_signer_component calls that trigger multiple wallet operations).
  */
 export default function WalletLoaderOverlay() {
-  const [loadingStates, setLoadingStates] = useState({
-    wallet: false,
-    albedo: false,
-  });
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [albedoLoadingState, setAlbedoLoadingState] = useState(false);
 
   useEffect(() => {
     const unsubWallet = subscribeToWalletLoading((loading) => {
-      setLoadingStates((prev) => { ...prev, wallet: loading });
+      setWalletLoading(loading);
     });
 
     const unsubAlbedo = albedoLoading.subscribe((state) => {
-      setLoadingStates((prev) => { ...prev, albedo: state.isLoading });
+      setAlbedoLoadingState(state.isLoading);
     });
 
     return () => {
@@ -39,17 +33,14 @@ export default function WalletLoaderOverlay() {
     };
   }, []);
 
-  const isLoading = loadingStates.wallet || loadingStates.albedo;
-
-  if (!isLoading) return null;
+  if (!walletLoading && !albedoLoadingState) return null;
 
   return (
     <div
       data-testid="wallet-loader-overlay"
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-bl2r text-white"
-
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm text-white"
     >
-      <div className="flex flex-col items-center space-y4 p-6 bg-gray-900 border border-gray-800 rounded-lg shadow-2xl max-w-sm text-center">
+      <div className="flex flex-col items-center space-y-4 p-6 bg-gray-900 border border-gray-800 rounded-lg shadow-2xl max-w-sm text-center">
         <ButtonSpinner className="h-10 w-10 text-indigo-500 animate-spin" />
         <div>
           <h3 className="text-lg font-semibold text-gray-100">
