@@ -3,6 +3,7 @@ import { useWallet } from "@/app/context/WalletContext";
 import { useIsAdmin } from "@/app/hooks/useIsAdmin";
 import { SUPPORTED_WALLETS } from "@/app/context/WalletContext";
 import Link from "next/link";
+import NotificationBell from "./NotificationBell";
 
 export default function Navbar() {
   const {
@@ -65,6 +66,7 @@ export default function Navbar() {
                   Admin
                 </Link>
               )}
+              <NotificationBell />
               <span
                 role="status"
                 className="text-xs sm:text-sm text-gray-300 font-mono bg-gray-800 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full transition-colors duration-200"
