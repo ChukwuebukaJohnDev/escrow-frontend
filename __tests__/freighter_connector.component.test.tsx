@@ -8,6 +8,39 @@ import {
   HIGH_FEE_THRESHOLD_STROOPS,
 } from "@/app/lib/freighter_connector";
 
+// WalletProvider pulls @creit.tech/stellar-wallets-kit at module scope, whose
+// bundled UMD dependencies are not Node-ESM-importable. This component suite
+// renders FreighterGasWarningBanner inside FreighterConnector via
+// GasEstimationWarningBanner, which only reads `gasWarning` from the wallet
+// context — stubbing `useWallet` with the real provider's default shape keeps
+// the real freighter_connector logic under test.
+const walletContextMock = vi.hoisted(() => ({
+  useWallet: () => ({
+    address: null,
+    assembleMultiSigTransaction: vi.fn(async () => ({
+      uniqueSigners: 0,
+      splitsValidated: 0,
+    })),
+    connect: vi.fn(async () => {}),
+    disconnect: vi.fn(),
+    isConnecting: false,
+    networkMismatchMessage: null,
+    selectedWalletId: "freighter",
+    setSelectedWalletId: vi.fn(),
+    signTransaction: vi.fn(async () => ""),
+    signatureTimeoutError: null,
+    signatureTimeoutXdr: null,
+    clearSignatureTimeout: vi.fn(),
+    simulationResult: null,
+    setSimulationResult: vi.fn(),
+    gasWarning: null,
+  }),
+}));
+
+vi.mock("@/app/context/WalletContext", () => ({
+  useWallet: walletContextMock.useWallet,
+}));
+
 // ---------------------------------------------------------------------------
 // #112 — React Testing Library assertions for freighter_connector
 // ---------------------------------------------------------------------------
