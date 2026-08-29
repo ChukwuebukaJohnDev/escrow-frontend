@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import WalletSelectorModal, {
   detectAnyWalletExtension,
@@ -205,6 +205,60 @@ describe("WalletSelectorModal wallet availability (#103)", () => {
 // ---------------------------------------------------------------------------
 // Task 4 — Graceful handling of user signature rejection exceptions
 // ---------------------------------------------------------------------------
+
+describe("WalletSelectorModal design tokens", () => {
+  it("uses semantic design token classes for modal shell and alert surfaces", () => {
+    render(<WalletSelectorModal isOpen={true} onClose={vi.fn()} />);
+
+    const backdrop = screen.getByTestId("wallet-selector-modal");
+    expect(backdrop).toHaveClass("bg-surface-page/80");
+
+    const content = screen.getByTestId("wallet-selector-modal-content");
+    expect(content).toHaveClass(
+      "bg-surface-card",
+      "border",
+      "border-border-subtle",
+      "text-text-primary"
+    );
+
+    const title = screen.getByText("Select Wallet");
+    expect(title).toHaveClass("text-text-primary");
+
+    const warning = screen.getByTestId("wallet-selector-availability-warning");
+    expect(warning).toHaveClass(
+      "bg-warning-soft/10",
+      "border-warning-soft/40",
+      "text-warning-soft"
+    );
+
+    const errorMessage = screen.getByTestId("wallet-selector-error-message");
+    expect(errorMessage).toHaveClass(
+      "bg-danger/20",
+      "border-danger/40",
+      "text-danger-soft"
+    );
+  });
+
+  it("uses design-token classes for wallet rows and status badges", () => {
+    render(
+      <WalletSelectorModal
+        isOpen={true}
+        onClose={vi.fn()}
+        selectedWalletId="freighter"
+      />
+    );
+
+    const selectedOption = screen.getByTestId("wallet-selector-option-freighter");
+    expect(selectedOption).toHaveClass(
+      "border-accent-soft",
+      "bg-accent/10",
+      "text-text-primary"
+    );
+
+    const connectedBadge = screen.getByTestId("wallet-selector-connected-badge");
+    expect(connectedBadge).toHaveClass("text-success-soft");
+  });
+});
 
 describe("WalletSelectorModal signature rejection handling (#105)", () => {
   beforeEach(() => {
