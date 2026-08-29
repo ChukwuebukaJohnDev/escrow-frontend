@@ -167,7 +167,35 @@ export default function NotificationBell({
 
           {/* Notifications */}
           {notifications.length === 0 && fields.length === 0 && (
-            <p className="text-sm text-text-muted">You&apos;re all caught up.</p>
+            <div
+              data-testid="notification-bell-empty-state"
+              role="status"
+              aria-label="Notifications and validation look good"
+              className="flex flex-col items-center gap-1 py-8 text-center"
+            >
+              <span
+                aria-hidden="true"
+                className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-surface-field text-lg"
+              >
+                🛎️
+              </span>
+              <p className="text-sm font-medium text-text-primary">
+                You&apos;re all caught up.
+              </p>
+              <p className="max-w-[16rem] text-xs text-text-muted">
+                No alerts right now. We&apos;ll surface anything that needs
+                your attention here.
+              </p>
+            </div>
+          )}
+          {notifications.length === 0 && fields.length > 0 && (
+            <div
+              data-testid="notification-bell-notifications-empty"
+              role="status"
+              className="rounded border border-dashed border-border-subtle px-3 py-2 text-center"
+            >
+              <p className="text-xs text-text-muted">No new notifications.</p>
+            </div>
           )}
           {notifications.map((notice) => (
             <div
