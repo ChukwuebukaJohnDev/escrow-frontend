@@ -24,6 +24,8 @@ export interface NotificationBellProps {
   fields?: NotificationField[];
   /** Label used for the trigger button (defaults to "Notifications"). */
   label?: string;
+  /** Disables the trigger and its panel while retaining the unread badge. */
+  disabled?: boolean;
 }
 
 const TYPE_STYLES: Record<NotificationType, string> = {
@@ -63,14 +65,20 @@ export default function NotificationBell({
   notifications = [],
   fields = [],
   label = "Notifications",
+  disabled = false,
 }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const badgeCount = computeBadgeCount(notifications, fields);
   const errorCount = notifications.filter((n) => n.type === "error").length + fields.filter((f) => f.error).length;
 
-  const focusRing =
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 rounded";
+  const triggerStates =
+    "bg-gray-800 text-gray-200 text-lg w-10 h-10 rounded-lg" +
+    " transition duration-150 ease-out" +
+    " hover:bg-gray-700" +
+    " active:bg-gray-600 active:scale-95 active:duration-75" +
+    " focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950" +
+    " disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-gray-800 disabled:hover:bg-gray-800 disabled:active:bg-gray-800 disabled:active:scale-100 disabled:focus-visible:ring-0 disabled:focus-visible:ring-offset-0";
 
   return (
     <div className="relative inline-block">
@@ -80,8 +88,10 @@ export default function NotificationBell({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={panelId}
+        aria-disabled={disabled || undefined}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className={`relative inline-flex items-center justify-center bg-gray-800 hover:bg-gray-700 text-gray-200 text-lg w-10 h-10 rounded-lg transition ${focusRing}`}
+        className={`relative inline-flex items-center justify-center ${triggerStates}`}
       >
         <span aria-hidden="true">🔔</span>
         {badgeCount > 0 && (
