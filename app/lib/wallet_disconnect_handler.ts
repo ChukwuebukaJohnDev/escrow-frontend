@@ -13,6 +13,67 @@
 
 const LOG_PREFIX = "[wallet_disconnect_handler]";
 
+export const DEFAULT_WALLET_DISCONNECT_TIMEOUT_MS = 60_000;
+
+export interface WalletDisconnectRequest {
+  payload?: Uint8Array | null;
+}
+
+export class WalletDisconnectTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`Wallet disconnect timed out after ${timeoutMs}ms`);
+    this.name = "WalletDisconnectTimeoutError";
+  }
+}
+
+export function clearWalletDisconnectMemory(
+  request: WalletDisconnectRequest,
+): WalletDisconnectRequest {
+  if (request.payload) request.payload.fill(0);
+  request.payload = null;
+  return request;
+}
+
+export interface WalletDisconnectTimeoutOptions {
+  timeoutMs?: number;
+  request?: WalletDisconnectRequest;
+  cleanup?: () => void;
+}
+
+export function runWalletDisconnectWithTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  options: WalletDisconnectTimeoutOptions = {},
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_WALLET_DISCONNECT_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return Promise.reject(new RangeError("timeoutMs must be a positive number"));
+  }
+
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new WalletDisconnectTimeoutError(timeoutMs));
+    }, timeoutMs);
+  });
+  const operationPromise = Promise.resolve().then(() => operation(controller.signal));
+
+  const resultPromise = (async () => {
+    try {
+      return await Promise.race([operationPromise, timeoutPromise]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      if (options.request) clearWalletDisconnectMemory(options.request);
+      options.cleanup?.();
+    }
+  })();
+
+  resultPromise.catch(() => {});
+  return resultPromise;
+}
+
 // =============================================================
 // Wallet availability detection
 // =============================================================
@@ -158,8 +219,9 @@ export interface WalletDisconnectResult {
  */
 export async function disconnectWalletWithCheck(
   walletId: string,
-  disconnectFn: () => Promise<void>,
+  disconnectFn: (signal?: AbortSignal) => Promise<void>,
   detector?: () => boolean,
+  options?: WalletDisconnectTimeoutOptions,
 ): Promise<WalletDisconnectResult> {
   const availability = checkWalletAvailabilityById(walletId, detector);
 
@@ -176,7 +238,10 @@ export async function disconnectWalletWithCheck(
   }
 
   try {
-    await disconnectFn();
+    await runWalletDisconnectWithTimeout(
+      (signal) => disconnectFn(signal),
+      options,
+    );
     return {
       success: true,
       error: null,
