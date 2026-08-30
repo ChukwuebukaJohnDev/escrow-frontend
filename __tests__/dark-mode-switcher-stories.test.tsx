@@ -71,6 +71,7 @@ describe("DarkModeSwitcher - Storybook stories #318", () => {
   });
 
   it("EmptyStateStandalone story renders empty state", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Story = stories.EmptyStateStandalone.render as any;
     expect(Story).toBeDefined();
     if (Story) render(<Story />);
@@ -78,6 +79,7 @@ describe("DarkModeSwitcher - Storybook stories #318", () => {
   });
 
   it("AllStates story renders overview", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Story = stories.AllStates.render as any;
     expect(Story).toBeDefined();
     if (Story) {
