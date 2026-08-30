@@ -3,6 +3,7 @@ import {
   detectWalletExtensionById,
   checkWalletAvailabilityById,
   disconnectWalletWithCheck,
+  type PendingTxSnapshot,
 } from "@/app/lib/wallet_disconnect_handler";
 
 // ---------------------------------------------------------------------------
@@ -104,13 +105,16 @@ describe("wallet_disconnect_handler detectWalletExtensionById (#task-4)", () => 
 
 describe("wallet_disconnect_handler checkWalletAvailabilityById (#task-4)", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it("returns available=true when wallet is present (freighter)", () => {
@@ -170,19 +174,24 @@ describe("wallet_disconnect_handler checkWalletAvailabilityById (#task-4)", () =
     expect(result.available).toBe(false);
     expect(result.setupInstruction).not.toBeNull();
     expect(result.installUrl).toContain("freighter.app");
-    expect(warnSpy).toHaveBeenCalled();
-    const logged = String(warnSpy.mock.calls[0][0]);
-    expect(logged).toContain("[wallet_disconnect_handler]");
+    expect(errorSpy).toHaveBeenCalled();
+    // The actual Error object must be passed so the stack trace is preserved.
+    const [firstArg, secondArg] = errorSpy.mock.calls[0];
+    expect(String(firstArg)).toContain("[wallet_disconnect_handler]");
+    expect(secondArg).toBeInstanceOf(Error);
+    expect((secondArg as Error).message).toBe("detector boom");
   });
 
   it("does not log when the wallet is available", () => {
     checkWalletAvailabilityById("freighter", () => true);
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it("does not log when the wallet is simply missing (unavailable)", () => {
     checkWalletAvailabilityById("freighter", () => false);
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -192,13 +201,16 @@ describe("wallet_disconnect_handler checkWalletAvailabilityById (#task-4)", () =
 
 describe("wallet_disconnect_handler disconnectWalletWithCheck (#task-4)", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it("returns success=true when wallet is available and disconnect succeeds", async () => {
@@ -281,10 +293,14 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck (#task-4)", () => 
     expect(result.error).toBe("extension crashed");
     expect(result.fallbackInstructions).toBeNull();
     expect(result.installUrl).toBeNull();
-    expect(warnSpy).toHaveBeenCalled();
-    const logged = String(warnSpy.mock.calls[0][0]);
-    expect(logged).toContain("[wallet_disconnect_handler]");
-    expect(logged).toContain("DISCONNECT FAILED");
+    // console.error must be called (not warn) so the stack trace is preserved.
+    expect(errorSpy).toHaveBeenCalled();
+    const [firstArg, secondArg] = errorSpy.mock.calls[0];
+    expect(String(firstArg)).toContain("[wallet_disconnect_handler]");
+    expect(String(firstArg)).toContain("DISCONNECT FAILED");
+    // The actual Error object must be the second argument so stack is visible.
+    expect(secondArg).toBeInstanceOf(Error);
+    expect((secondArg as Error).message).toBe("extension crashed");
   });
 
   it("returns error with non-Error thrown value", async () => {
@@ -307,5 +323,63 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck (#task-4)", () => 
     const logged = String(warnSpy.mock.calls[0][0]);
     expect(logged).toContain("[wallet_disconnect_handler]");
     expect(logged).toContain("not installed");
+  });
+
+  // -------------------------------------------------------------------------
+  // Issue #241 — structured console error/warn + transaction debug tracking
+  // -------------------------------------------------------------------------
+
+  it("#241: successful disconnect with no pending tx produces no console.error output", async () => {
+    const disconnectFn = vi.fn(async () => {});
+    await disconnectWalletWithCheck("freighter", disconnectFn, () => true);
+    expect(errorSpy).not.toHaveBeenCalled();
+    // Only the informational success warn should fire — no errors.
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0][0])).toContain("disconnected successfully");
+  });
+
+  it("#241: disconnect that encounters a cleanup error logs console.error with the actual error object", async () => {
+    const boom = new Error("SDK exploded");
+    const disconnectFn = vi.fn(async () => {
+      throw boom;
+    });
+    await disconnectWalletWithCheck("freighter", disconnectFn, () => true);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const [firstArg, secondArg] = errorSpy.mock.calls[0];
+    // Tag must be present and greppable.
+    expect(String(firstArg)).toContain("[wallet_disconnect_handler]");
+    expect(String(firstArg)).toContain("DISCONNECT FAILED");
+    // The actual Error object (with stack) must be the second argument.
+    expect(secondArg).toBe(boom);
+    expect(secondArg).toBeInstanceOf(Error);
+    expect((secondArg as Error).stack).toBeDefined();
+  });
+
+  it("#241: disconnect while a transaction is pending logs console.warn with transaction identifying info", async () => {
+    const disconnectFn = vi.fn(async () => {});
+    const pending: PendingTxSnapshot = {
+      txId: "abc123hash",
+      status: "signing",
+      context: "payment",
+    };
+    await disconnectWalletWithCheck(
+      "freighter",
+      disconnectFn,
+      () => true,
+      pending,
+    );
+
+    // The pending-tx warn fires before the success warn, so it's call index 0.
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    const [pendingArg, pendingDetail] = warnSpy.mock.calls[0];
+    expect(String(pendingArg)).toContain("[wallet_disconnect_handler]");
+    expect(String(pendingArg)).toContain("DISCONNECT WITH PENDING TRANSACTION");
+    // Transaction identifying fields must be present in the logged object.
+    expect(pendingDetail).toMatchObject({
+      txId: "abc123hash",
+      status: "signing",
+      context: "payment",
+    });
   });
 });
