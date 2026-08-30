@@ -3,6 +3,7 @@ import {
   detectWalletExtensionById,
   checkWalletAvailabilityById,
   disconnectWalletWithCheck,
+  walletActiveKeysStore,
 } from "@/app/lib/wallet_disconnect_handler";
 
 // ---------------------------------------------------------------------------
@@ -10,6 +11,10 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("wallet_disconnect_handler detectWalletExtensionById (#task-4)", () => {
+  beforeEach(() => {
+    walletActiveKeysStore.clear();
+  });
+
   afterEach(() => {
     const w = window as unknown as Record<string, unknown>;
     delete w["freighterApi"];
@@ -106,6 +111,7 @@ describe("wallet_disconnect_handler checkWalletAvailabilityById (#task-4)", () =
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    walletActiveKeysStore.clear();
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
@@ -194,6 +200,7 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck (#task-4)", () => 
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    walletActiveKeysStore.clear();
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
