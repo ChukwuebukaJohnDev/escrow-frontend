@@ -71,14 +71,14 @@ describe("DarkModeSwitcher - Storybook stories #318", () => {
   });
 
   it("EmptyStateStandalone story renders empty state", () => {
-    const Story = stories.EmptyStateStandalone.render;
+    const Story = stories.EmptyStateStandalone.render as any;
     expect(Story).toBeDefined();
     if (Story) render(<Story />);
     // check via previous empty? Need to isolate
   });
 
   it("AllStates story renders overview", () => {
-    const Story = stories.AllStates.render;
+    const Story = stories.AllStates.render as any;
     expect(Story).toBeDefined();
     if (Story) {
       const { container } = render(<Story />);
