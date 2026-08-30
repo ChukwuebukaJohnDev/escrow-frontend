@@ -49,8 +49,16 @@ export default function SignatureTimeoutAlert({
   } = useWallet();
   const albedoAssembly = useAlbedoMultiSigAssembly(NETWORK_PASSPHRASE);
   const ledgerAssembly = useLedgerMultiSigAssembly(NETWORK_PASSPHRASE);
-  const [isRetrying, setIsRetrying] = useState(false);
-   /**
+    const [isRetrying, setIsRetrying] = useState(false);
+
+  const activeError = error ?? signatureTimeoutError;
+  const activeTransactionXdr = transactionXdr ?? signatureTimeoutXdr ?? undefined;
+  const hasTimeout =
+    isOpen ||
+    (activeError instanceof Error &&
+      activeError.name === "WalletSignatureTimeoutError");
+
+  /**
    * Derive the parse message directly from the transaction XDR instead of
    * storing it in state via useEffect.  This avoids the React 19
    * `react-hooks/set-state-in-effect` lint rule, which flags synchronous
@@ -68,10 +76,6 @@ export default function SignatureTimeoutAlert({
       return parseError instanceof Error ? parseError.message : String(parseError);
     }
   }, [activeTransactionXdr]);
-
-  const activeError = error ?? signatureTimeoutError;
-  const activeTransactionXdr = transactionXdr ?? signatureTimeoutXdr ?? undefined;
-  const hasTimeout =
     isOpen ||
     (activeError instanceof Error &&
       activeError.name === "WalletSignatureTimeoutError");
