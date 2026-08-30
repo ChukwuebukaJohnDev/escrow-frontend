@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useWallet } from "@/app/context/WalletContext";
 import { NETWORK_PASSPHRASE } from "@/app/lib/contract";
 import {
@@ -50,7 +50,24 @@ export default function SignatureTimeoutAlert({
   const albedoAssembly = useAlbedoMultiSigAssembly(NETWORK_PASSPHRASE);
   const ledgerAssembly = useLedgerMultiSigAssembly(NETWORK_PASSPHRASE);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [parseMessage, setParseMessage] = useState<string | null>(null);
+   /**
+   * Derive the parse message directly from the transaction XDR instead of
+   * storing it in state via useEffect.  This avoids the React 19
+   * `react-hooks/set-state-in-effect` lint rule, which flags synchronous
+   * setState calls inside effects as a source of cascading renders.
+   */
+  const parseMessage = useMemo<string | null>(() => {
+    if (!activeTransactionXdr) return null;
+
+    try {
+      parseMultiSigEnvelope(activeTransactionXdr, {
+        parseEnvelopeXdr: createStellarEnvelopeParser(NETWORK_PASSPHRASE),
+      });
+      return null;
+    } catch (parseError) {
+      return parseError instanceof Error ? parseError.message : String(parseError);
+    }
+  }, [activeTransactionXdr]);
 
   const activeError = error ?? signatureTimeoutError;
   const activeTransactionXdr = transactionXdr ?? signatureTimeoutXdr ?? undefined;
@@ -69,23 +86,7 @@ export default function SignatureTimeoutAlert({
     });
   }, [activeError, hasTimeout, networkMismatchMessage, transactionId]);
 
-  useEffect(() => {
-    if (!activeTransactionXdr) {
-      setParseMessage(null);
-      return;
-    }
-
-    try {
-      parseMultiSigEnvelope(activeTransactionXdr, {
-        parseEnvelopeXdr: createStellarEnvelopeParser(NETWORK_PASSPHRASE),
-      });
-      setParseMessage(null);
-    } catch (parseError) {
-      setParseMessage(
-        parseError instanceof Error ? parseError.message : String(parseError)
-      );
-    }
-  }, [activeTransactionXdr]);
+  
 
   if (!hasTimeout && !networkMismatchMessage) return null;
 
