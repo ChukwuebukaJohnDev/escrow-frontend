@@ -49,7 +49,7 @@ export default function SignatureTimeoutAlert({
   } = useWallet();
   const albedoAssembly = useAlbedoMultiSigAssembly(NETWORK_PASSPHRASE);
   const ledgerAssembly = useLedgerMultiSigAssembly(NETWORK_PASSPHRASE);
-    const [isRetrying, setIsRetrying] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const activeError = error ?? signatureTimeoutError;
   const activeTransactionXdr = transactionXdr ?? signatureTimeoutXdr ?? undefined;
@@ -76,9 +76,6 @@ export default function SignatureTimeoutAlert({
       return parseError instanceof Error ? parseError.message : String(parseError);
     }
   }, [activeTransactionXdr]);
-    isOpen ||
-    (activeError instanceof Error &&
-      activeError.name === "WalletSignatureTimeoutError");
 
   useEffect(() => {
     if (!hasTimeout && !networkMismatchMessage) return;
@@ -89,8 +86,6 @@ export default function SignatureTimeoutAlert({
       phase: "error",
     });
   }, [activeError, hasTimeout, networkMismatchMessage, transactionId]);
-
-  
 
   if (!hasTimeout && !networkMismatchMessage) return null;
 

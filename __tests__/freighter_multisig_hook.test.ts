@@ -1,5 +1,14 @@
-import { act, renderHook } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import {
+  Account,
+  Asset,
+  BASE_FEE,
+  Keypair,
+  Networks,
+  Operation,
+  TransactionBuilder,
+} from "@stellar/stellar-sdk";
 import { useFreighterMultiSigAssembly } from "@/app/hooks/useFreighterMultiSigAssembly";
 import { WalletMultiSigStructureError } from "@/app/lib/wallet_state_context";
 import {
@@ -11,7 +20,40 @@ function toBase64(text: string): string {
   return Buffer.from(text, "utf-8").toString("base64");
 }
 
-const TEST_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
+const TEST_NETWORK_PASSPHRASE = Networks.TESTNET;
+
+/**
+ * Builds a real, already-signed testnet transaction envelope.
+ *
+ * The hook parses XDR through the Stellar SDK (`TransactionBuilder.fromXDR`),
+ * so the fixture has to be an actual `ENVELOPE_TYPE_TX_V1` structure — a
+ * base64 blob of arbitrary text decodes to bytes whose first four bytes are
+ * read as the envelope type and fail with
+ * "unknown EnvelopeType member for value 1633771873" (`0x61616161` == "aaaa").
+ * One signature is attached so `parseStructure` sees a non-empty
+ * `DecoratedSignature` list.
+ */
+function buildSignedEnvelopeXdr(): string {
+  const source = Keypair.random();
+  const destination = Keypair.random();
+  const account = new Account(source.publicKey(), "0");
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: TEST_NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      Operation.payment({
+        destination: destination.publicKey(),
+        asset: Asset.native(),
+        amount: "1",
+      })
+    )
+    .setTimeout(30)
+    .build();
+
+  tx.sign(source);
+  return tx.toEnvelope().toXDR("base64");
+}
 
 describe("useFreighterMultiSigAssembly hook (#109)", () => {
   it("parseStructure parses a well-formed envelope without errors", () => {
@@ -19,12 +61,13 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("a".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const shape = result.current.parseStructure(xdr);
 
     expect(shape.baseXdr).toBe(xdr);
-    expect(shape.signatures).toBeGreaterThan(0);
-    expect(shape.signatureSlotIndices.length).toBeGreaterThan(0);
+    expect(shape.signatures).toBe(1);
+    expect(shape.signatureSlotIndices).toEqual([1]);
+    expect(shape.sourceAccount).toMatch(/^G[A-Z2-7]{55}$/);
   });
 
   it("parseStructure throws WalletMultiSigStructureError for empty input", () => {
@@ -42,9 +85,10 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("a".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const tx = result.current.prepareTransaction(xdr);
     expect(tx).toBeDefined();
+    expect(typeof tx.toXDR).toBe("function");
   });
 
   it("prepareTransaction throws for empty XDR", () => {
@@ -62,11 +106,13 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("b".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const tx = result.current.prepareTransaction(xdr);
     const serialized = result.current.serializeTransaction(tx);
     expect(typeof serialized).toBe("string");
     expect(serialized.length).toBeGreaterThan(0);
+    // Round-trip is lossless for a signed envelope.
+    expect(serialized).toBe(xdr);
   });
 
   it("signTransaction validates the XDR before calling the signing function", async () => {
@@ -74,7 +120,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("c".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const signFn = vi.fn(async () => "signed-xdr");
 
     const signed = await result.current.signTransaction(xdr, signFn);

@@ -55,7 +55,12 @@ describe("SignatureTimeoutAlert", () => {
   it("keeps the loader counter balanced when an external operation is active", async () => {
     render(<WalletLoaderOverlay />);
     startWalletOperation();
-    expect(screen.getByTestId("wallet-loader-overlay")).toBeInTheDocument();
+    // `startWalletOperation` notifies subscribers synchronously, but the
+    // overlay's resulting `setIsLoading` is a React state update — it only
+    // reaches the DOM once React flushes it, so query asynchronously.
+    await waitFor(() =>
+      expect(screen.getByTestId("wallet-loader-overlay")).toBeInTheDocument()
+    );
     endWalletOperation();
     await waitFor(() => expect(screen.queryByTestId("wallet-loader-overlay")).not.toBeInTheDocument());
   });
