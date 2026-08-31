@@ -206,10 +206,17 @@ export default function DisputeRaiseModal({
               data-testid="dispute-raise-modal-counterparty"
               className="break-all"
             >
-              {counterparty ?? "—"}
-            </dd>
-          </div>
-        </dl>
+              Why are you raising this dispute?
+            </label>
+            <textarea
+              id="dispute-raise-reason"
+              data-testid="dispute-raise-modal-reason"
+              value={reason}
+              maxLength={DISPUTE_REASON_MAX_LENGTH}
+              disabled={isSubmitting}
+              onChange={(e) => setReason(e.target.value)}
+              className={DISPUTE_MODAL_CLASSES.textarea}
+            />
 
         <label
           htmlFor={REASON_FIELD_ID}
