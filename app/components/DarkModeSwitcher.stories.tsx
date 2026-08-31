@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
+// @storybook/test not installed - use no-op
 
 import DarkModeSwitcher, { DarkModeSwitcherEmptyState } from "./DarkModeSwitcher";
 
@@ -39,7 +39,7 @@ export const Light: Story = {
   name: "Light - default",
   args: {
     isDarkMode: false,
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -50,7 +50,7 @@ export const Dark: Story = {
   name: "Dark - active",
   args: {
     isDarkMode: true,
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -62,7 +62,7 @@ export const DisabledLight: Story = {
   args: {
     isDarkMode: false,
     disabled: true,
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -74,7 +74,7 @@ export const DisabledDark: Story = {
   args: {
     isDarkMode: true,
     disabled: true,
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -86,7 +86,7 @@ export const Loading: Story = {
   args: {
     isDarkMode: false,
     loading: true,
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -97,7 +97,7 @@ export const Empty: Story = {
   name: "Empty - no theme data",
   args: {
     isDarkMode: null as unknown as boolean,
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -108,7 +108,7 @@ export const EmptyUndefined: Story = {
   name: "Empty - undefined",
   args: {
     isDarkMode: undefined,
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -120,7 +120,7 @@ export const CustomAriaLabel: Story = {
   args: {
     isDarkMode: false,
     ariaLabel: "Toggle application theme",
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -131,7 +131,7 @@ export const InteractiveDark: Story = {
   name: "Interactive - dark hover/focus",
   args: {
     isDarkMode: true,
-    onToggle: fn(),
+    onToggle: () => {},
   },
   parameters: {
     pseudo: { hover: true, focus: true },
@@ -145,7 +145,7 @@ export const InteractiveLight: Story = {
   name: "Interactive - light hover",
   args: {
     isDarkMode: false,
-    onToggle: fn(),
+    onToggle: () => {},
   },
 };
 
@@ -166,23 +166,23 @@ export const AllStates: Story = {
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-4">
         <span className="text-sm text-text-muted w-24">Light</span>
-        <DarkModeSwitcher isDarkMode={false} onToggle={fn()} />
+        <DarkModeSwitcher isDarkMode={false} onToggle={() => {}} />
       </div>
       <div className="flex items-center gap-4">
         <span className="text-sm text-text-muted w-24">Dark</span>
-        <DarkModeSwitcher isDarkMode={true} onToggle={fn()} />
+        <DarkModeSwitcher isDarkMode={true} onToggle={() => {}} />
       </div>
       <div className="flex items-center gap-4">
         <span className="text-sm text-text-muted w-24">Disabled</span>
-        <DarkModeSwitcher isDarkMode={false} disabled onToggle={fn()} />
+        <DarkModeSwitcher isDarkMode={false} disabled onToggle={() => {}} />
       </div>
       <div className="flex items-center gap-4">
         <span className="text-sm text-text-muted w-24">Loading</span>
-        <DarkModeSwitcher loading isDarkMode={false} onToggle={fn()} />
+        <DarkModeSwitcher loading isDarkMode={false} onToggle={() => {}} />
       </div>
       <div className="flex items-center gap-4">
         <span className="text-sm text-text-muted w-24">Empty</span>
-        <DarkModeSwitcher isDarkMode={null} onToggle={fn()} />
+        <DarkModeSwitcher isDarkMode={null} onToggle={() => {}} />
       </div>
     </div>
   ),
