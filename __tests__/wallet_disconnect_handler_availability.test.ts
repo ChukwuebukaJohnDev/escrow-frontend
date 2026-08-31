@@ -3,6 +3,10 @@ import {
   detectWalletExtensionById,
   checkWalletAvailabilityById,
   disconnectWalletWithCheck,
+  runWalletDisconnectWithTimeout,
+  WalletDisconnectTimeoutError,
+  walletActiveKeysStore,
+  type PendingTxSnapshot,
 } from "@/app/lib/wallet_disconnect_handler";
 
 // ---------------------------------------------------------------------------
@@ -10,6 +14,10 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("wallet_disconnect_handler detectWalletExtensionById (#task-4)", () => {
+  beforeEach(() => {
+    walletActiveKeysStore.clear();
+  });
+
   afterEach(() => {
     const w = window as unknown as Record<string, unknown>;
     delete w["freighterApi"];
@@ -104,13 +112,17 @@ describe("wallet_disconnect_handler detectWalletExtensionById (#task-4)", () => 
 
 describe("wallet_disconnect_handler checkWalletAvailabilityById (#task-4)", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    walletActiveKeysStore.clear();
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it("returns available=true when wallet is present (freighter)", () => {
@@ -170,19 +182,24 @@ describe("wallet_disconnect_handler checkWalletAvailabilityById (#task-4)", () =
     expect(result.available).toBe(false);
     expect(result.setupInstruction).not.toBeNull();
     expect(result.installUrl).toContain("freighter.app");
-    expect(warnSpy).toHaveBeenCalled();
-    const logged = String(warnSpy.mock.calls[0][0]);
-    expect(logged).toContain("[wallet_disconnect_handler]");
+    expect(errorSpy).toHaveBeenCalled();
+    // The actual Error object must be passed so the stack trace is preserved.
+    const [firstArg, secondArg] = errorSpy.mock.calls[0];
+    expect(String(firstArg)).toContain("[wallet_disconnect_handler]");
+    expect(secondArg).toBeInstanceOf(Error);
+    expect((secondArg as Error).message).toBe("detector boom");
   });
 
   it("does not log when the wallet is available", () => {
     checkWalletAvailabilityById("freighter", () => true);
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it("does not log when the wallet is simply missing (unavailable)", () => {
     checkWalletAvailabilityById("freighter", () => false);
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -192,13 +209,20 @@ describe("wallet_disconnect_handler checkWalletAvailabilityById (#task-4)", () =
 
 describe("wallet_disconnect_handler disconnectWalletWithCheck (#task-4)", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  let infoSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    walletActiveKeysStore.clear();
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
+    errorSpy.mockRestore();
+    infoSpy.mockRestore();
   });
 
   it("returns success=true when wallet is available and disconnect succeeds", async () => {
@@ -281,10 +305,14 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck (#task-4)", () => 
     expect(result.error).toBe("extension crashed");
     expect(result.fallbackInstructions).toBeNull();
     expect(result.installUrl).toBeNull();
-    expect(warnSpy).toHaveBeenCalled();
-    const logged = String(warnSpy.mock.calls[0][0]);
-    expect(logged).toContain("[wallet_disconnect_handler]");
-    expect(logged).toContain("DISCONNECT FAILED");
+    // console.error must be called (not warn) so the stack trace is preserved.
+    expect(errorSpy).toHaveBeenCalled();
+    const [firstArg, secondArg] = errorSpy.mock.calls[0];
+    expect(String(firstArg)).toContain("[wallet_disconnect_handler]");
+    expect(String(firstArg)).toContain("DISCONNECT FAILED");
+    // The actual Error object must be the second argument so stack is visible.
+    expect(secondArg).toBeInstanceOf(Error);
+    expect((secondArg as Error).message).toBe("extension crashed");
   });
 
   it("returns error with non-Error thrown value", async () => {
@@ -307,5 +335,140 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck (#task-4)", () => 
     const logged = String(warnSpy.mock.calls[0][0]);
     expect(logged).toContain("[wallet_disconnect_handler]");
     expect(logged).toContain("not installed");
+  });
+
+  // -------------------------------------------------------------------------
+  // Issue #241 — structured console error/warn + transaction debug tracking
+  // -------------------------------------------------------------------------
+
+  it("#241: successful disconnect with no pending tx produces no console.error output", async () => {
+    const disconnectFn = vi.fn(async () => {});
+    await disconnectWalletWithCheck("freighter", disconnectFn, () => true);
+    expect(errorSpy).not.toHaveBeenCalled();
+    // The success log is informational, so it goes to console.info rather
+    // than warn/error.
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    expect(String(infoSpy.mock.calls[0][0])).toContain("disconnected successfully");
+  });
+
+  it("#241: disconnect that encounters a cleanup error logs console.error with the actual error object", async () => {
+    const boom = new Error("SDK exploded");
+    const disconnectFn = vi.fn(async () => {
+      throw boom;
+    });
+    await disconnectWalletWithCheck("freighter", disconnectFn, () => true);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const [firstArg, secondArg] = errorSpy.mock.calls[0];
+    // Tag must be present and greppable.
+    expect(String(firstArg)).toContain("[wallet_disconnect_handler]");
+    expect(String(firstArg)).toContain("DISCONNECT FAILED");
+    // The actual Error object (with stack) must be the second argument.
+    expect(secondArg).toBe(boom);
+    expect(secondArg).toBeInstanceOf(Error);
+    expect((secondArg as Error).stack).toBeDefined();
+  });
+
+  it("#241: disconnect while a transaction is pending logs console.warn with transaction identifying info", async () => {
+    const disconnectFn = vi.fn(async () => {});
+    const pending: PendingTxSnapshot = {
+      txId: "abc123hash",
+      status: "signing",
+      context: "payment",
+    };
+    await disconnectWalletWithCheck(
+      "freighter",
+      disconnectFn,
+      () => true,
+      // #357 already claimed the 4th slot for timeout options, so pendingTx
+      // sits after it.
+      undefined,
+      pending,
+    );
+
+    // The pending-tx notice is the only console.warn on this path -- the
+    // success line is informational and goes to console.info.
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    const [pendingArg, pendingDetail] = warnSpy.mock.calls[0];
+    expect(String(pendingArg)).toContain("[wallet_disconnect_handler]");
+    expect(String(pendingArg)).toContain("DISCONNECT WITH PENDING TRANSACTION");
+    // Transaction identifying fields must be present in the logged object.
+    expect(pendingDetail).toMatchObject({
+      txId: "abc123hash",
+      status: "signing",
+      context: "payment",
+    });
+  });
+});
+
+describe("wallet_disconnect_handler timeout bounds", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("aborts a stalled operation and clears payload and listeners", async () => {
+    let signal: AbortSignal | undefined;
+    const payload = new Uint8Array([1, 2, 3]);
+    const cleanup = vi.fn();
+    const operation = runWalletDisconnectWithTimeout(
+      (operationSignal) => {
+        signal = operationSignal;
+        return new Promise<never>(() => {});
+      },
+      { timeoutMs: 100, request: { payload }, cleanup },
+    );
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(operation).rejects.toBeInstanceOf(WalletDisconnectTimeoutError);
+    expect(signal?.aborted).toBe(true);
+    expect([...payload]).toEqual([0, 0, 0]);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("clears payload, listeners, and the timer when the operation succeeds", async () => {
+    const payload = new Uint8Array([4, 5]);
+    const cleanup = vi.fn();
+
+    await expect(
+      runWalletDisconnectWithTimeout(
+        async () => "disconnected",
+        { timeoutMs: 100, request: { payload }, cleanup },
+      ),
+    ).resolves.toBe("disconnected");
+
+    expect([...payload]).toEqual([0, 0]);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("returns a timeout error from disconnectWalletWithCheck and aborts its provider", async () => {
+    let signal: AbortSignal | undefined;
+    const payload = new Uint8Array([9]);
+    const cleanup = vi.fn();
+    const resultPromise = disconnectWalletWithCheck(
+      "freighter",
+      (operationSignal) => {
+        signal = operationSignal;
+        return new Promise<void>(() => {});
+      },
+      () => true,
+      { timeoutMs: 50, request: { payload }, cleanup },
+    );
+
+    await vi.advanceTimersByTimeAsync(50);
+    const result = await resultPromise;
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/timed out after 50ms/);
+    expect(signal?.aborted).toBe(true);
+    expect([...payload]).toEqual([0]);
+    expect(cleanup).toHaveBeenCalledOnce();
   });
 });

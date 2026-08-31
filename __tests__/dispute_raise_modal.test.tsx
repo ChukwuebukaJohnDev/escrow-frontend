@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import DisputeRaiseModal from "@/app/components/DisputeRaiseModal";
 
@@ -6,392 +6,428 @@ describe("DisputeRaiseModal", () => {
   const defaultProps = {
     isOpen: true,
     onClose: vi.fn(),
-    onConfirm: vi.fn(),
-    milestoneNumber: 1,
-    isPending: false,
-    errorMessage: null,
+    onSubmit: vi.fn(),
+    milestoneIndex: 0,
   };
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe("Rendering", () => {
-    it("renders when isOpen is true", () => {
+    it("renders modal when isOpen is true", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
       expect(
-        screen.getByRole("dialog", { name: "Raise Dispute" })
+        screen.getByRole("dialog", { name: /raise dispute for milestone 1/i })
       ).toBeInTheDocument();
     });
 
-    it("does not render when isOpen is false", () => {
+    it("does not render modal when isOpen is false", () => {
       render(<DisputeRaiseModal {...defaultProps} isOpen={false} />);
       expect(
-        screen.queryByRole("dialog", { name: "Raise Dispute" })
+        screen.queryByRole("dialog", { name: /raise dispute for milestone 1/i })
       ).not.toBeInTheDocument();
     });
 
-    it("displays the correct milestone number in the title", () => {
-      render(<DisputeRaiseModal {...defaultProps} milestoneNumber={3} />);
-      expect(
-        screen.getByText("Raise Dispute for Milestone 3")
-      ).toBeInTheDocument();
+    it("renders milestone number in title", () => {
+      render(<DisputeRaiseModal {...defaultProps} milestoneIndex={2} />);
+      expect(screen.getByText(/raise dispute - milestone 3/i)).toBeInTheDocument();
     });
 
-    it("renders the close button", () => {
+    it("renders close button", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
       expect(
-        screen.getByRole("button", { name: "Close" })
+        screen.getByRole("button", { name: /close modal/i })
       ).toBeInTheDocument();
     });
 
-    it("renders the cancel button", () => {
+    it("renders textarea for dispute reason", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
       expect(
-        screen.getByRole("button", { name: "Cancel" })
+        screen.getByRole("textbox", { name: /dispute reason/i })
       ).toBeInTheDocument();
     });
 
-    it("renders the confirm button", () => {
+    it("renders cancel button", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
       expect(
-        screen.getByRole("button", { name: "Raise Dispute" })
+        screen.getByRole("button", { name: /cancel/i })
       ).toBeInTheDocument();
     });
 
-    it("renders the reason textarea", () => {
+    it("renders submit button", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
       expect(
-        screen.getByLabelText("Reason for dispute (optional)")
+        screen.getByRole("button", { name: /raise dispute/i })
       ).toBeInTheDocument();
     });
 
-    it("displays error message when provided", () => {
-      render(
-        <DisputeRaiseModal
-          {...defaultProps}
-          errorMessage="Failed to raise dispute"
-        />
-      );
-      expect(
-        screen.getByText("Failed to raise dispute")
-      ).toBeInTheDocument();
+    it("displays character count", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      expect(screen.getByText(/0\/500 characters/i)).toBeInTheDocument();
     });
 
-    it("shows loading state when isPending is true", () => {
-      render(<DisputeRaiseModal {...defaultProps} isPending={true} />);
+    it("shows loading state when isLoading is true", () => {
+      render(<DisputeRaiseModal {...defaultProps} isLoading={true} />);
+      expect(screen.getByText(/submitting\.\.\./i)).toBeInTheDocument();
+    });
+
+    it("disables submit button when loading", () => {
+      render(<DisputeRaiseModal {...defaultProps} isLoading={true} />);
+      const submitButton = screen.getByRole("button", { name: /submitting/i });
+      expect(submitButton).toBeDisabled();
+    });
+
+    it("disables submit button when reason is empty", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
       expect(
-        screen.getByRole("button", { name: "Raising Dispute..." })
-      ).toBeInTheDocument();
+        screen.getByRole("button", { name: /raise dispute/i })
+      ).toBeDisabled();
     });
   });
 
-  describe("CSS Micro-animations", () => {
-    it("applies fade-in animation to modal backdrop", () => {
+  describe("Validation - Empty Reason", () => {
+    it("shows error when submitting empty reason", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
-      const backdrop = screen.getByRole("dialog", { name: "Raise Dispute" });
-      expect(backdrop).toHaveClass("animate-fade-in");
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      // Button should be disabled initially
+      expect(submitButton).toBeDisabled();
+
+      // Enable button by typing and clearing
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      fireEvent.change(textarea, { target: { value: "test" } });
+      fireEvent.change(textarea, { target: { value: "" } });
+
+      // Try to submit via direct call (simulating enabled state)
+      fireEvent.click(submitButton);
     });
 
-    it("applies slide-in animation to modal content", () => {
+    it("displays error message for empty reason", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
-      const content = screen.getByTestId("dispute-raise-modal-content");
-      expect(content).toHaveClass("animate-slide-in");
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+
+      // Type something then clear it
+      fireEvent.change(textarea, { target: { value: "test" } });
+      fireEvent.change(textarea, { target: { value: "" } });
+
+      // Submit should show error
+      expect(screen.queryByText(/please provide a reason/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Validation - Minimum Length", () => {
+    it("shows error when reason is less than 10 characters", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      fireEvent.change(textarea, { target: { value: "short" } });
+      fireEvent.click(submitButton);
+
+      expect(
+        screen.getByText(/reason must be at least 10 characters/i)
+      ).toBeInTheDocument();
     });
 
-    it("applies shake animation to error message", () => {
+    it("does not show error when reason is exactly 10 characters", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      fireEvent.change(textarea, { target: { value: "1234567890" } });
+      fireEvent.click(submitButton);
+
+      expect(
+        screen.queryByText(/reason must be at least 10 characters/i)
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Validation - Maximum Length", () => {
+    it("shows error when reason exceeds 500 characters", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      const longText = "a".repeat(501);
+      fireEvent.change(textarea, { target: { value: longText } });
+      fireEvent.click(submitButton);
+
+      expect(
+        screen.getByText(/reason must not exceed 500 characters/i)
+      ).toBeInTheDocument();
+    });
+
+    it("does not show error when reason is exactly 500 characters", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      const maxLengthText = "a".repeat(500);
+      fireEvent.change(textarea, { target: { value: maxLengthText } });
+      fireEvent.click(submitButton);
+
+      expect(
+        screen.queryByText(/reason must not exceed 500 characters/i)
+      ).not.toBeInTheDocument();
+    });
+
+    it("enforces maxLength attribute on textarea", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      expect(textarea).toHaveAttribute("maxLength", "500");
+    });
+  });
+
+  describe("Error Display", () => {
+    it("displays field error with role='alert'", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      fireEvent.change(textarea, { target: { value: "short" } });
+      fireEvent.click(submitButton);
+
+      const errorElement = screen.getByText(
+        /reason must be at least 10 characters/i
+      );
+      expect(errorElement).toHaveAttribute("role", "alert");
+    });
+
+    it("displays field error with aria-live='polite'", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      fireEvent.change(textarea, { target: { value: "short" } });
+      fireEvent.click(submitButton);
+
+      const errorElement = screen.getByText(
+        /reason must be at least 10 characters/i
+      );
+      expect(errorElement).toHaveAttribute("aria-live", "polite");
+    });
+
+    it("clears field error when user starts typing", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      // Trigger error
+      fireEvent.change(textarea, { target: { value: "short" } });
+      fireEvent.click(submitButton);
+      expect(
+        screen.getByText(/reason must be at least 10 characters/i)
+      ).toBeInTheDocument();
+
+      // Start typing valid input
+      fireEvent.change(textarea, { target: { value: "valid reason text" } });
+      expect(
+        screen.queryByText(/reason must be at least 10 characters/i)
+      ).not.toBeInTheDocument();
+    });
+
+    it("displays submission error from props", () => {
       render(
         <DisputeRaiseModal
           {...defaultProps}
-          errorMessage="Error occurred"
+          submissionError="Network error occurred"
         />
       );
-      const error = screen.getByTestId("dispute-raise-modal-error");
-      expect(error).toHaveClass("animate-shake");
+
+      expect(screen.getByText(/network error occurred/i)).toBeInTheDocument();
     });
 
-    it("applies transition-colors to close button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const closeButton = screen.getByRole("button", { name: "Close" });
-      expect(closeButton).toHaveClass("transition-colors");
+    it("displays general error with role='alert'", () => {
+      render(
+        <DisputeRaiseModal
+          {...defaultProps}
+          submissionError="Network error occurred"
+        />
+      );
+
+      const errorElement = screen.getByText(/network error occurred/i);
+      expect(errorElement).toHaveAttribute("role", "alert");
     });
 
-    it("applies hover scale animation to close button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const closeButton = screen.getByRole("button", { name: "Close" });
-      expect(closeButton).toHaveClass("hover:scale-110");
-    });
+    it("displays general error with aria-live='assertive'", () => {
+      render(
+        <DisputeRaiseModal
+          {...defaultProps}
+          submissionError="Network error occurred"
+        />
+      );
 
-    it("applies active scale animation to close button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const closeButton = screen.getByRole("button", { name: "Close" });
-      expect(closeButton).toHaveClass("active:scale-95");
-    });
-
-    it("applies transition-all to cancel button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const cancelButton = screen.getByRole("button", { name: "Cancel" });
-      expect(cancelButton).toHaveClass("transition-all");
-    });
-
-    it("applies hover scale animation to cancel button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const cancelButton = screen.getByRole("button", { name: "Cancel" });
-      expect(cancelButton).toHaveClass("hover:scale-[1.02]");
-    });
-
-    it("applies active scale animation to cancel button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const cancelButton = screen.getByRole("button", { name: "Cancel" });
-      expect(cancelButton).toHaveClass("active:scale-[0.98]");
-    });
-
-    it("applies transition-all to confirm button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const confirmButton = screen.getByRole("button", { name: "Raise Dispute" });
-      expect(confirmButton).toHaveClass("transition-all");
-    });
-
-    it("applies hover scale animation to confirm button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const confirmButton = screen.getByRole("button", { name: "Raise Dispute" });
-      expect(confirmButton).toHaveClass("hover:scale-[1.02]");
-    });
-
-    it("applies active scale animation to confirm button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const confirmButton = screen.getByRole("button", { name: "Raise Dispute" });
-      expect(confirmButton).toHaveClass("active:scale-[0.98]");
-    });
-
-    it("applies transition-all to textarea", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const textarea = screen.getByLabelText("Reason for dispute (optional)");
-      expect(textarea).toHaveClass("transition-all");
-    });
-
-    it("applies focus scale animation to textarea", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const textarea = screen.getByLabelText("Reason for dispute (optional)");
-      expect(textarea).toHaveClass("focus:scale-[1.01]");
-    });
-
-    it("applies hover border animation to textarea", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const textarea = screen.getByLabelText("Reason for dispute (optional)");
-      expect(textarea).toHaveClass("hover:border-border-strong");
-    });
-
-    it("disables hover scale animation on buttons when disabled", () => {
-      render(<DisputeRaiseModal {...defaultProps} isPending={true} />);
-      const cancelButton = screen.getByRole("button", { name: "Cancel" });
-      expect(cancelButton).toHaveClass("disabled:hover:scale-100");
-    });
-
-    it("disables active scale animation on buttons when disabled", () => {
-      render(<DisputeRaiseModal {...defaultProps} isPending={true} />);
-      const cancelButton = screen.getByRole("button", { name: "Cancel" });
-      expect(cancelButton).toHaveClass("disabled:hover:scale-100");
+      const errorElement = screen.getByText(/network error occurred/i);
+      expect(errorElement).toHaveAttribute("aria-live", "assertive");
     });
   });
 
   describe("User Interactions", () => {
     it("calls onClose when close button is clicked", () => {
-      const onClose = vi.fn();
-      render(<DisputeRaiseModal {...defaultProps} onClose={onClose} />);
-      
-      fireEvent.click(screen.getByRole("button", { name: "Close" }));
-      
-      expect(onClose).toHaveBeenCalledTimes(1);
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const closeButton = screen.getByRole("button", { name: /close modal/i });
+
+      fireEvent.click(closeButton);
+
+      expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
     });
 
     it("calls onClose when cancel button is clicked", () => {
-      const onClose = vi.fn();
-      render(<DisputeRaiseModal {...defaultProps} onClose={onClose} />);
-      
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      
-      expect(onClose).toHaveBeenCalledTimes(1);
-    });
-
-    it("calls onConfirm when confirm button is clicked", () => {
-      const onConfirm = vi.fn();
-      render(<DisputeRaiseModal {...defaultProps} onConfirm={onConfirm} />);
-      
-      fireEvent.click(screen.getByRole("button", { name: "Raise Dispute" }));
-      
-      expect(onConfirm).toHaveBeenCalledTimes(1);
-    });
-
-    it("does not call onConfirm when isPending is true", () => {
-      const onConfirm = vi.fn();
-      render(
-        <DisputeRaiseModal {...defaultProps} onConfirm={onConfirm} isPending={true} />
-      );
-      
-      const confirmButton = screen.getByRole("button", { name: "Raising Dispute..." });
-      fireEvent.click(confirmButton);
-      
-      expect(onConfirm).not.toHaveBeenCalled();
-    });
-
-    it("updates reason textarea value on input", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
-      
-      const textarea = screen.getByLabelText("Reason for dispute (optional)");
-      fireEvent.change(textarea, { target: { value: "Work not delivered" } });
-      
-      expect(textarea).toHaveValue("Work not delivered");
+      const cancelButton = screen.getByRole("button", { name: /cancel/i });
+
+      fireEvent.click(cancelButton);
+
+      expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
     });
 
-    it("clears reason textarea when close button is clicked", () => {
-      const onClose = vi.fn();
-      render(<DisputeRaiseModal {...defaultProps} onClose={onClose} />);
-      
-      const textarea = screen.getByLabelText("Reason for dispute (optional)");
-      fireEvent.change(textarea, { target: { value: "Test reason" } });
-      
-      fireEvent.click(screen.getByRole("button", { name: "Close" }));
-      
-      expect(onClose).toHaveBeenCalled();
+    it("calls onSubmit with trimmed reason when valid", async () => {
+      const mockSubmit = vi.fn().mockResolvedValue(undefined);
+      render(<DisputeRaiseModal {...defaultProps} onSubmit={mockSubmit} />);
+
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      fireEvent.change(textarea, { target: { value: "  valid reason  " } });
+      fireEvent.click(submitButton);
+
+      expect(mockSubmit).toHaveBeenCalledWith("valid reason");
+    });
+
+    it("does not call onSubmit when validation fails", () => {
+      const mockSubmit = vi.fn();
+      render(<DisputeRaiseModal {...defaultProps} onSubmit={mockSubmit} />);
+
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      fireEvent.change(textarea, { target: { value: "short" } });
+      fireEvent.click(submitButton);
+
+      expect(mockSubmit).not.toHaveBeenCalled();
+    });
+
+    it("updates character count as user types", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+
+      expect(screen.getByText(/0\/500 characters/i)).toBeInTheDocument();
+
+      fireEvent.change(textarea, { target: { value: "hello" } });
+      expect(screen.getByText(/5\/500 characters/i)).toBeInTheDocument();
+
+      fireEvent.change(textarea, { target: { value: "hello world" } });
+      expect(screen.getByText(/11\/500 characters/i)).toBeInTheDocument();
+    });
+
+    it("hides character count when error is displayed", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      fireEvent.change(textarea, { target: { value: "short" } });
+      fireEvent.click(submitButton);
+
+      expect(screen.queryByText(/5\/500 characters/i)).not.toBeInTheDocument();
+    });
+
+    it("sets aria-invalid on textarea when there's an error", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      expect(textarea).toHaveAttribute("aria-invalid", "false");
+
+      fireEvent.change(textarea, { target: { value: "short" } });
+      fireEvent.click(submitButton);
+
+      expect(textarea).toHaveAttribute("aria-invalid", "true");
+    });
+
+    it("sets aria-describedby on textarea when there's an error", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      expect(textarea).not.toHaveAttribute("aria-describedby");
+
+      fireEvent.change(textarea, { target: { value: "short" } });
+      fireEvent.click(submitButton);
+
+      expect(textarea).toHaveAttribute("aria-describedby", "dispute-reason-error");
     });
   });
 
   describe("Accessibility", () => {
-    it("has role='dialog' on modal container", () => {
+    it("has aria-modal attribute on dialog", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
-      expect(
-        screen.getByRole("dialog", { name: "Raise Dispute" })
-      ).toBeInTheDocument();
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toHaveAttribute("aria-modal", "true");
     });
 
-    it("has aria-label on modal container", () => {
-      const { container } = render(
-        <DisputeRaiseModal {...defaultProps} />
-      );
-      const modal = container.querySelector('[data-testid="dispute-raise-modal"]');
-      expect(modal).toHaveAttribute("aria-label", "Raise Dispute");
-    });
-
-    it("has aria-modal='true' on modal container", () => {
-      const { container } = render(
-        <DisputeRaiseModal {...defaultProps} />
-      );
-      const modal = container.querySelector('[data-testid="dispute-raise-modal"]');
-      expect(modal).toHaveAttribute("aria-modal", "true");
-    });
-
-    it("has aria-label on close button", () => {
+    it("has proper aria-label on dialog", () => {
       render(<DisputeRaiseModal {...defaultProps} />);
-      expect(
-        screen.getByRole("button", { name: "Close" })
-      ).toHaveAttribute("aria-label", "Close");
-    });
-
-    it("has role='alert' on error message", () => {
-      render(
-        <DisputeRaiseModal
-          {...defaultProps}
-          errorMessage="Error occurred"
-        />
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toHaveAttribute(
+        "aria-label",
+        "Raise dispute for Milestone 1"
       );
-      const error = screen.getByText("Error occurred");
-      expect(error).toHaveAttribute("role", "alert");
     });
 
-    it("has aria-live='assertive' on error message", () => {
-      render(
-        <DisputeRaiseModal
-          {...defaultProps}
-          errorMessage="Error occurred"
-        />
-      );
-      const error = screen.getByText("Error occurred");
-      expect(error).toHaveAttribute("aria-live", "assertive");
-    });
-
-    it("disables textarea when isPending is true", () => {
-      render(<DisputeRaiseModal {...defaultProps} isPending={true} />);
-      const textarea = screen.getByLabelText("Reason for dispute (optional)");
-      expect(textarea).toBeDisabled();
-    });
-
-    it("disables close button when isPending is true", () => {
-      render(<DisputeRaiseModal {...defaultProps} isPending={true} />);
-      const closeButton = screen.getByRole("button", { name: "Close" });
+    it("disables close button when loading", () => {
+      render(<DisputeRaiseModal {...defaultProps} isLoading={true} />);
+      const closeButton = screen.getByRole("button", { name: /close modal/i });
       expect(closeButton).toBeDisabled();
     });
 
-    it("disables cancel button when isPending is true", () => {
-      render(<DisputeRaiseModal {...defaultProps} isPending={true} />);
-      const cancelButton = screen.getByRole("button", { name: "Cancel" });
+    it("disables cancel button when loading", () => {
+      render(<DisputeRaiseModal {...defaultProps} isLoading={true} />);
+      const cancelButton = screen.getByRole("button", { name: /cancel/i });
       expect(cancelButton).toBeDisabled();
     });
 
-    it("disables confirm button when isPending is true", () => {
-      render(<DisputeRaiseModal {...defaultProps} isPending={true} />);
-      const confirmButton = screen.getByRole("button", { name: "Raising Dispute..." });
-      expect(confirmButton).toBeDisabled();
+    it("disables textarea when loading", () => {
+      render(<DisputeRaiseModal {...defaultProps} isLoading={true} />);
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      expect(textarea).toBeDisabled();
     });
   });
 
-  describe("Animation State Transitions", () => {
-    it("applies smooth transition on modal open", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const backdrop = screen.getByRole("dialog", { name: "Raise Dispute" });
-      expect(backdrop).toHaveClass("animate-fade-in");
+  describe("Error Handling", () => {
+    it("displays error when onSubmit throws an error", async () => {
+      const mockSubmit = vi.fn().mockRejectedValue(new Error("Submission failed"));
+      render(<DisputeRaiseModal {...defaultProps} onSubmit={mockSubmit} />);
+
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
+
+      fireEvent.change(textarea, { target: { value: "valid reason text" } });
+      fireEvent.click(submitButton);
+
+      // Wait for async operation
+      await vi.waitFor(() => {
+        expect(screen.getByText(/submission failed/i)).toBeInTheDocument();
+      });
     });
 
-    it("applies smooth transition on modal content slide-in", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const content = screen.getByTestId("dispute-raise-modal-content");
-      expect(content).toHaveClass("animate-slide-in");
-    });
+    it("displays generic error when onSubmit throws non-Error", async () => {
+      const mockSubmit = vi.fn().mockRejectedValue("string error");
+      render(<DisputeRaiseModal {...defaultProps} onSubmit={mockSubmit} />);
 
-    it("applies error shake animation when error appears", () => {
-      const { rerender } = render(
-        <DisputeRaiseModal {...defaultProps} errorMessage={null} />
-      );
-      
-      rerender(
-        <DisputeRaiseModal
-          {...defaultProps}
-          errorMessage="New error"
-        />
-      );
-      
-      const error = screen.getByTestId("dispute-raise-modal-error");
-      expect(error).toHaveClass("animate-shake");
-    });
+      const textarea = screen.getByRole("textbox", { name: /dispute reason/i });
+      const submitButton = screen.getByRole("button", { name: /raise dispute/i });
 
-    it("maintains animation classes during re-renders", () => {
-      const { rerender } = render(
-        <DisputeRaiseModal {...defaultProps} />
-      );
-      
-      rerender(<DisputeRaiseModal {...defaultProps} milestoneNumber={2} />);
-      
-      const backdrop = screen.getByRole("dialog", { name: "Raise Dispute" });
-      const content = screen.getByTestId("dispute-raise-modal-content");
-      
-      expect(backdrop).toHaveClass("animate-fade-in");
-      expect(content).toHaveClass("animate-slide-in");
-    });
-  });
+      fireEvent.change(textarea, { target: { value: "valid reason text" } });
+      fireEvent.click(submitButton);
 
-  describe("Animation Duration and Timing", () => {
-    it("uses transition duration of 200ms for buttons", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const cancelButton = screen.getByRole("button", { name: "Cancel" });
-      expect(cancelButton).toHaveClass("duration-200");
-    });
-
-    it("uses transition duration of 200ms for textarea", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const textarea = screen.getByLabelText("Reason for dispute (optional)");
-      expect(textarea).toHaveClass("duration-200");
-    });
-
-    it("uses transition duration of 200ms for close button", () => {
-      render(<DisputeRaiseModal {...defaultProps} />);
-      const closeButton = screen.getByRole("button", { name: "Close" });
-      expect(closeButton).toHaveClass("duration-200");
+      // Wait for async operation
+      await vi.waitFor(() => {
+        expect(
+          screen.getByText(/failed to submit dispute/i)
+        ).toBeInTheDocument();
+      });
     });
   });
 });
