@@ -40,6 +40,32 @@ export interface WalletBadgeProps {
   /** Callback fired when badge is clicked */
   onClick?: () => void;
 
+  // --- Validation / alert surfaces (derived-status form) ---
+  /** Field-level error message. Takes precedence over `alert`. */
+  error?: string | null;
+  /** Alias of `error`. */
+  fieldError?: string | null;
+  /** Check `address` against the Stellar address format and flag it if invalid. */
+  validateAddress?: boolean;
+  /** Force the invalid-address state regardless of `validateAddress`. */
+  invalidAddress?: boolean;
+  /** Non-blocking advisory message, shown when there is no error. */
+  alert?: string | null;
+
+  // --- Empty-state placeholders (derived-status form) ---
+  /** Copy used for the placeholder and the empty address slot. */
+  emptyText?: string;
+  /** Custom node rendered in place of the default placeholder tag. */
+  emptyPlaceholder?: React.ReactNode;
+  /** Force the placeholder on even when an address is present. */
+  showEmptyPlaceholder?: boolean;
+  /** Empty array renders a "No active accounts" placeholder. */
+  accounts?: unknown[];
+  /** Empty array renders a "No wallets available" placeholder. */
+  wallets?: unknown[];
+  /** Empty array renders a "No items available" placeholder. */
+  items?: unknown[];
+
   // --- Shared ---
   /** Callback fired when disconnect action is triggered */
   onDisconnect?: () => void;
@@ -58,6 +84,15 @@ export function formatAddress(address: string, prefixLen = 4, suffixLen = 4): st
 }
 
 /**
+ * Shape check for a Stellar public address: `G` followed by 55 base32
+ * characters (A–Z and 2–7). Format only — it does not verify the checksum.
+ */
+export function isValidStellarAddress(address?: string | null): boolean {
+  if (!address) return false;
+  return /^G[A-Z2-7]{55}$/.test(address);
+}
+
+/**
  * WalletBadge Component (`wallet_badge`)
  *
  * Header status indicator representing the current wallet connection status,
@@ -72,6 +107,17 @@ export default function WalletBadge({
   providerName,
   networkMismatch,
   showStatusDot = true,
+  error,
+  fieldError,
+  validateAddress = false,
+  invalidAddress = false,
+  alert,
+  emptyText,
+  emptyPlaceholder,
+  showEmptyPlaceholder = false,
+  accounts,
+  wallets,
+  items,
   onDisconnect,
   onClick,
   className = "",
@@ -167,21 +213,62 @@ export default function WalletBadge({
     statusState = "connected";
   }
 
-  const ariaLabel =
-    statusState === "connected"
+  // Error takes precedence over the advisory alert, which in turn overrides
+  // the plain connection status on the dot.
+  const formatInvalid =
+    invalidAddress || (validateAddress && !isValidStellarAddress(address));
+  const errorText =
+    error ?? fieldError ?? (formatInvalid ? "Invalid Stellar address" : null);
+  const alertText = errorText ? null : (alert ?? null);
+
+  // An empty address, an explicitly emptied list, or the caller forcing it.
+  const emptyList =
+    (accounts && accounts.length === 0) ||
+    (wallets && wallets.length === 0) ||
+    (items && items.length === 0);
+  // A present-but-blank address is an empty state; a missing one is just the
+  // ordinary disconnected badge, unless the caller supplied placeholder copy.
+  const blankAddress = typeof address === "string" && address.trim() === "";
+  const missingAddress = address == null;
+  const isEmptyState = Boolean(
+    showEmptyPlaceholder ||
+      emptyList ||
+      blankAddress ||
+      (missingAddress && (emptyText || emptyPlaceholder)),
+  );
+  const placeholderText = emptyText ?? "Not Connected";
+  const emptyListText =
+    emptyText ??
+    (accounts && accounts.length === 0
+      ? "No active accounts"
+      : wallets && wallets.length === 0
+        ? "No wallets available"
+        : "No items available");
+
+  if (isEmptyState && (blankAddress || missingAddress) && !isConnecting) {
+    statusText = placeholderText;
+  }
+
+  const ariaLabel = isEmptyState
+    ? `Wallet placeholder state: ${emptyText ?? placeholderText}`
+    : statusState === "connected"
       ? `Connected wallet ${address}`
       : statusState === "connecting"
-      ? "Wallet connecting"
-      : statusState === "mismatch"
-      ? `Wallet network mismatch ${address || ""}`.trim()
-      : "Wallet not connected";
+        ? "Wallet connecting"
+        : statusState === "mismatch"
+          ? `Wallet network mismatch ${address || ""}`.trim()
+          : "Wallet not connected";
+
+  const dotState = errorText ? "error" : alertText ? "alert" : statusState;
 
   const dotClasses = {
     connected: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]",
     connecting: "bg-amber-400 animate-pulse",
     mismatch: "bg-rose-400 animate-ping",
     disconnected: "bg-gray-500",
-  }[statusState];
+    error: "bg-red-500",
+    alert: "bg-amber-500",
+  }[dotState];
 
   // `data-status` is mirrored onto the badge as well as the dot so callers that
   // read it off the badge itself keep working in this form too.
@@ -191,8 +278,10 @@ export default function WalletBadge({
     <div
       data-testid={testId}
       data-status={badgeStatus}
+      data-empty-state={isEmptyState ? "true" : undefined}
       role="status"
       aria-label={ariaLabel}
+      aria-invalid={errorText ? "true" : undefined}
       onClick={onClick}
       className={`inline-flex items-center gap-2 rounded-full border border-gray-800 bg-gray-900/90 px-3 py-1 text-sm font-mono text-gray-200 shadow-sm transition-all duration-150 hover:border-gray-700 ${
         onClick ? "cursor-pointer hover:bg-gray-800/80" : ""
@@ -201,7 +290,7 @@ export default function WalletBadge({
       {showStatusDot && (
         <span
           data-testid="wallet-status-dot"
-          data-status={statusState}
+          data-status={dotState}
           className={`h-2 w-2 rounded-full transition-colors ${dotClasses}`}
           aria-hidden="true"
         />
@@ -216,9 +305,54 @@ export default function WalletBadge({
         </span>
       )}
 
-      <span data-testid="wallet-address-text" className="tracking-wide">
+      <span
+        data-testid="wallet-address-text"
+        className={`tracking-wide${
+          isEmptyState && (blankAddress || missingAddress) ? " italic" : ""
+        }`}
+      >
         {statusText}
       </span>
+
+      {isEmptyState &&
+        (emptyPlaceholder ? (
+          <div data-testid="wallet-badge-placeholder-custom">
+            {emptyPlaceholder}
+          </div>
+        ) : emptyList ? (
+          <span
+            data-testid="wallet-empty-list-placeholder"
+            className="text-xs font-sans text-gray-500 bg-gray-800/70 px-1.5 py-0.5 rounded"
+          >
+            {emptyListText}
+          </span>
+        ) : (
+          <span
+            data-testid="wallet-badge-placeholder"
+            className="text-xs font-sans text-gray-500 bg-gray-800/70 px-1.5 py-0.5 rounded"
+          >
+            {emptyText ?? "Empty"}
+          </span>
+        ))}
+
+      {errorText && (
+        <span
+          data-testid="wallet-field-error"
+          role="alert"
+          className="inline-flex items-center gap-1 text-xs font-sans text-red-400"
+        >
+          <span data-testid="wallet-error-text">{errorText}</span>
+        </span>
+      )}
+
+      {alertText && (
+        <span
+          data-testid="wallet-alert-badge"
+          className="inline-flex items-center gap-1 text-xs font-sans text-amber-400"
+        >
+          <span data-testid="wallet-alert-text">{alertText}</span>
+        </span>
+      )}
 
       {activeConnected && onDisconnect && (
         <button
