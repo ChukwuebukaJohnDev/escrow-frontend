@@ -193,17 +193,22 @@ describe("DisputeRaiseModal responsive classes (#332)", () => {
 
   it("scales panel padding up across the breakpoints", () => {
     render(<DisputeRaiseModal {...defaultProps} />);
-    const panel = screen.getByTestId(PANEL);
-    expect(panel).toHaveClass("p-4");
-    expect(panel).toHaveClass("sm:p-6");
-    expect(panel).toHaveClass("lg:p-8");
+    // #383 moved the padding off the panel and onto the overlay wrapper, so
+    // the panel can stay a flex column while the middle region scrolls.
+    const wrapper = screen.getByTestId(PANEL).firstElementChild as HTMLElement;
+    expect(wrapper).toHaveClass("p-4");
+    expect(wrapper).toHaveClass("sm:p-6");
+    expect(wrapper).toHaveClass("lg:p-8");
   });
 
   it("bounds the panel height so it never exceeds the viewport", () => {
     render(<DisputeRaiseModal {...defaultProps} />);
     const panel = screen.getByTestId(PANEL);
     expect(panel).toHaveClass("max-h-[92vh]");
-    expect(panel).toHaveClass("overflow-y-auto");
+    // Scrolling now happens in the inner content region rather than on the
+    // panel, so the header and actions stay pinned on short viewports.
+    const scrollable = panel.querySelector(".overflow-y-auto");
+    expect(scrollable).toBeInTheDocument();
   });
 
   it("stacks the summary into one column on mobile and two from sm:", () => {
@@ -280,6 +285,24 @@ describe("DisputeRaiseModal responsive classes (#332)", () => {
     expect(DISPUTE_MODAL_CLASSES.panel).toContain("w-full");
     expect(DISPUTE_MODAL_CLASSES.actions).toContain("flex-col-reverse");
     expect(DISPUTE_MODAL_CLASSES.summary).toContain("grid-cols-1");
+  });
+
+  it("includes overlay wrapper for mobile viewport height constraints", () => {
+    expect(DISPUTE_MODAL_CLASSES.overlayWrapper).toContain("flex");
+    expect(DISPUTE_MODAL_CLASSES.overlayWrapper).toContain("flex-col");
+    expect(DISPUTE_MODAL_CLASSES.overlayWrapper).toContain("max-h-[92vh]");
+    expect(DISPUTE_MODAL_CLASSES.overlayWrapper).toContain("overflow-hidden");
+  });
+
+  it("includes scrollable content area for middle content", () => {
+    expect(DISPUTE_MODAL_CLASSES.scrollableContent).toContain("flex-1");
+    expect(DISPUTE_MODAL_CLASSES.scrollableContent).toContain("overflow-y-auto");
+    expect(DISPUTE_MODAL_CLASSES.scrollableContent).toContain("min-h-0");
+  });
+
+  it("sets header and actions as flex-shrink-0 to prevent shrinking", () => {
+    expect(DISPUTE_MODAL_CLASSES.header).toContain("flex-shrink-0");
+    expect(DISPUTE_MODAL_CLASSES.actions).toContain("flex-shrink-0");
   });
 });
 
@@ -400,6 +423,89 @@ describe("DisputeRaiseModal at varying viewport sizes (#332)", () => {
 
       unmount();
     }
+  });
+
+  it("renders overlay wrapper structure on mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phone);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    const panel = screen.getByTestId(PANEL);
+    expect(panel.firstChild).toHaveClass("flex");
+    expect(panel.firstChild).toHaveClass("flex-col");
+  });
+
+  it("renders scrollable content area on mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phone);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    const panel = screen.getByTestId(PANEL);
+    const scrollableContent = panel.querySelector(".overflow-y-auto");
+    expect(scrollableContent).toBeInTheDocument();
+    expect(scrollableContent).toHaveClass("flex-1");
+  });
+
+  it("keeps action buttons clickable on small mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phoneSmall);
+    const onConfirm = vi.fn();
+    render(<DisputeRaiseModal {...defaultProps} onConfirm={onConfirm} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    // #375 keeps the confirm action disabled until a reason is supplied, so
+    // fill the field before asserting the buttons are usable.
+    fireEvent.change(screen.getByTestId("dispute-raise-modal-reason"), {
+      target: { value: "The delivered work does not match the milestone." },
+    });
+
+    // Verify buttons are present and not disabled
+    const confirmBtn = screen.getByTestId("dispute-raise-modal-confirm");
+    const cancelBtn = screen.getByTestId("dispute-raise-modal-cancel");
+    expect(confirmBtn).not.toBeDisabled();
+    expect(cancelBtn).not.toBeDisabled();
+
+    // Verify buttons have proper touch target sizes
+    expect(confirmBtn).toHaveClass("min-h-[44px]");
+    expect(cancelBtn).toHaveClass("min-h-[44px]");
+  });
+
+  it("allows scrolling of middle content on small mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phoneSmall);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    const panel = screen.getByTestId(PANEL);
+    const scrollableContent = panel.querySelector(".overflow-y-auto");
+    expect(scrollableContent).toBeInTheDocument();
+    expect(scrollableContent).toHaveClass("min-h-0");
+  });
+
+  it("maintains header visibility on mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phone);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    const header = screen.getByTestId("dispute-raise-modal-title").parentElement;
+    expect(header).toHaveClass("flex-shrink-0");
+  });
+
+  it("maintains footer actions visibility on mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phone);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    const actions = screen.getByTestId(ACTIONS);
+    expect(actions).toHaveClass("flex-shrink-0");
   });
 
   it("stops tracking resizes after unmount", async () => {

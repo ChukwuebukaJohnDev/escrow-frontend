@@ -154,135 +154,143 @@ export default function DisputeRaiseModal({
         data-max-width={layout.maxWidthClass}
         className={DISPUTE_MODAL_CLASSES.panel}
       >
-        <div className={DISPUTE_MODAL_CLASSES.header}>
-          <h2
-            data-testid="dispute-raise-modal-title"
-            className={DISPUTE_MODAL_CLASSES.title}
-          >
-            {heading}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            data-testid="dispute-raise-modal-close"
-            aria-label="Close modal"
-            className="min-h-[44px] min-w-[44px] text-secondary hover:text-primary transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-
-        <p className="mb-4 text-sm text-secondary">
-          Raising a dispute pauses the escrow and hands the decision to the
-          arbiter. This cannot be undone from here.
-        </p>
-
-        <dl
-          data-testid="dispute-raise-modal-summary"
-          data-columns={layout.summaryColumns}
-          data-stacked={layout.stackSummary}
-          className={DISPUTE_MODAL_CLASSES.summary}
-        >
-          <div className={DISPUTE_MODAL_CLASSES.summaryCell}>
-            <dt className="text-muted">Job</dt>
-            <dd data-testid="dispute-raise-modal-job" className="break-all">
-              {jobId ?? "—"}
-            </dd>
-          </div>
-          <div className={DISPUTE_MODAL_CLASSES.summaryCell}>
-            <dt className="text-muted">Milestone</dt>
-            <dd data-testid="dispute-raise-modal-milestone">
-              {milestoneNumber == null ? "Whole job" : `#${milestoneNumber}`}
-            </dd>
-          </div>
-          <div className={DISPUTE_MODAL_CLASSES.summaryCell}>
-            <dt className="text-muted">Amount</dt>
-            <dd data-testid="dispute-raise-modal-amount">{amount ?? "—"}</dd>
-          </div>
-          <div className={DISPUTE_MODAL_CLASSES.summaryCell}>
-            <dt className="text-muted">Counterparty</dt>
-            <dd
-              data-testid="dispute-raise-modal-counterparty"
-              className="break-all"
+        <div className={DISPUTE_MODAL_CLASSES.overlayWrapper}>
+          <div className={DISPUTE_MODAL_CLASSES.header}>
+            <h2
+              data-testid="dispute-raise-modal-title"
+              className={DISPUTE_MODAL_CLASSES.title}
             >
-              {counterparty ?? "—"}
-            </dd>
+              {heading}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              data-testid="dispute-raise-modal-close"
+              aria-label="Close modal"
+              className="min-h-[44px] min-w-[44px] text-secondary hover:text-primary transition-colors"
+            >
+              ✕
+            </button>
           </div>
-        </dl>
 
-        <label
-          htmlFor={REASON_FIELD_ID}
-          className="mb-1 block text-sm text-secondary"
-        >
-          Dispute reason
-        </label>
-        <textarea
-          id={REASON_FIELD_ID}
-          data-testid="dispute-raise-modal-reason"
-          value={reason}
-          maxLength={DISPUTE_REASON_MAX_LENGTH}
-          disabled={busy}
-          aria-invalid={fieldError ? "true" : "false"}
-          aria-describedby={fieldError ? REASON_ERROR_ID : undefined}
-          onChange={(e) => handleReasonChange(e.target.value)}
-          className={DISPUTE_MODAL_CLASSES.textarea}
-        />
+          <div className={DISPUTE_MODAL_CLASSES.scrollableContent}>
+            <p className="mb-4 text-sm text-secondary">
+              Raising a dispute pauses the escrow and hands the decision to the
+              arbiter. This cannot be undone from here.
+            </p>
 
-        {fieldError ? (
-          <p
-            id={REASON_ERROR_ID}
-            data-testid="dispute-raise-modal-validation-error"
-            role="alert"
-            aria-live="polite"
-            className="mt-2 text-sm text-danger-soft"
-          >
-            {fieldError}
-          </p>
-        ) : (
-          <p
-            data-testid="dispute-raise-modal-character-count"
-            className="mt-2 text-xs text-muted"
-          >
-            {reason.length}/{DISPUTE_REASON_MAX_LENGTH} characters
-          </p>
-        )}
+            <dl
+              data-testid="dispute-raise-modal-summary"
+              data-columns={layout.summaryColumns}
+              data-stacked={layout.stackSummary}
+              className={DISPUTE_MODAL_CLASSES.summary}
+            >
+              <div className={DISPUTE_MODAL_CLASSES.summaryCell}>
+                <dt className="text-muted">Job</dt>
+                <dd data-testid="dispute-raise-modal-job" className="break-all">
+                  {jobId ?? "—"}
+                </dd>
+              </div>
+              <div className={DISPUTE_MODAL_CLASSES.summaryCell}>
+                <dt className="text-muted">Milestone</dt>
+                <dd data-testid="dispute-raise-modal-milestone">
+                  {milestoneNumber == null
+                    ? "Whole job"
+                    : `#${milestoneNumber}`}
+                </dd>
+              </div>
+              <div className={DISPUTE_MODAL_CLASSES.summaryCell}>
+                <dt className="text-muted">Amount</dt>
+                <dd data-testid="dispute-raise-modal-amount">
+                  {amount ?? "—"}
+                </dd>
+              </div>
+              <div className={DISPUTE_MODAL_CLASSES.summaryCell}>
+                <dt className="text-muted">Counterparty</dt>
+                <dd
+                  data-testid="dispute-raise-modal-counterparty"
+                  className="break-all"
+                >
+                  {counterparty ?? "—"}
+                </dd>
+              </div>
+            </dl>
 
-        {generalError && (
+            <label
+              htmlFor={REASON_FIELD_ID}
+              className="mb-1 block text-sm text-secondary"
+            >
+              Dispute reason
+            </label>
+            <textarea
+              id={REASON_FIELD_ID}
+              data-testid="dispute-raise-modal-reason"
+              value={reason}
+              maxLength={DISPUTE_REASON_MAX_LENGTH}
+              disabled={busy}
+              aria-invalid={fieldError ? "true" : "false"}
+              aria-describedby={fieldError ? REASON_ERROR_ID : undefined}
+              onChange={(e) => handleReasonChange(e.target.value)}
+              className={DISPUTE_MODAL_CLASSES.textarea}
+            />
+
+            {fieldError ? (
+              <p
+                id={REASON_ERROR_ID}
+                data-testid="dispute-raise-modal-validation-error"
+                role="alert"
+                aria-live="polite"
+                className="mt-2 text-sm text-danger-soft"
+              >
+                {fieldError}
+              </p>
+            ) : (
+              <p
+                data-testid="dispute-raise-modal-character-count"
+                className="mt-2 text-xs text-muted"
+              >
+                {reason.length}/{DISPUTE_REASON_MAX_LENGTH} characters
+              </p>
+            )}
+
+            {generalError && (
+              <div
+                data-testid="dispute-raise-modal-error"
+                role="alert"
+                aria-live="assertive"
+                className="mt-3 rounded-lg border border-danger bg-danger/20 px-4 py-3 text-sm text-danger-soft"
+              >
+                {generalError}
+              </div>
+            )}
+          </div>
+
           <div
-            data-testid="dispute-raise-modal-error"
-            role="alert"
-            aria-live="assertive"
-            className="mt-3 rounded-lg border border-danger bg-danger/20 px-4 py-3 text-sm text-danger-soft"
+            data-testid="dispute-raise-modal-actions"
+            data-stacked={layout.stackActions}
+            className={DISPUTE_MODAL_CLASSES.actions}
           >
-            {generalError}
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              data-testid="dispute-raise-modal-cancel"
+              className={`${DISPUTE_MODAL_CLASSES.button} border border-white/10 text-primary hover:bg-white/5 disabled:opacity-50`}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={busy || reason.trim() === ""}
+              data-testid="dispute-raise-modal-confirm"
+              className={`${DISPUTE_MODAL_CLASSES.button} flex items-center justify-center gap-2 bg-danger text-white hover:opacity-90 disabled:opacity-50`}
+            >
+              {busy && <ButtonSpinner />}
+              {busy ? "Submitting..." : "Raise Dispute"}
+            </button>
           </div>
-        )}
-
-        <div
-          data-testid="dispute-raise-modal-actions"
-          data-stacked={layout.stackActions}
-          className={DISPUTE_MODAL_CLASSES.actions}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            data-testid="dispute-raise-modal-cancel"
-            className={`${DISPUTE_MODAL_CLASSES.button} border border-white/10 text-primary hover:bg-white/5 disabled:opacity-50`}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={busy || reason.trim() === ""}
-            data-testid="dispute-raise-modal-confirm"
-            className={`${DISPUTE_MODAL_CLASSES.button} flex items-center justify-center gap-2 bg-danger text-white hover:opacity-90 disabled:opacity-50`}
-          >
-            {busy && <ButtonSpinner />}
-            {busy ? "Submitting..." : "Raise Dispute"}
-          </button>
         </div>
       </div>
     </div>
