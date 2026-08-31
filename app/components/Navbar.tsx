@@ -34,18 +34,30 @@ export default function Navbar() {
           ⚠️ {networkMismatchMessage}
         </div>
       )}
+      {/*
+       * `relative z-10` establishes a stacking context so the nav sits above
+       * non-overlay page content on mobile. Full-screen overlays (LedgerLoaderOverlay,
+       * WalletLoaderOverlay) intentionally use z-50 and will still cover the nav
+       * correctly during wallet operations.
+       */}
       <nav
         aria-label="Primary"
-        className="border-b border-border-subtle bg-surface-page px-6 py-4 flex items-center justify-between"
+        className="relative z-10 border-b border-border-subtle bg-surface-page px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 flex-wrap"
       >
         <Link
           href="/"
           aria-label="Escrow home"
-          className={`text-xl font-bold text-text-primary tracking-tight ${focusRing}`}
+          className={`text-xl font-bold text-text-primary tracking-tight shrink-0 ${focusRing}`}
         >
           <span aria-hidden="true">🔐</span> Escrow
         </Link>
-        <div className="flex items-center gap-4">
+        {/*
+         * `flex-wrap` allows nav items to wrap to a second line on narrow
+         * viewports (e.g. iPhone SE 375px wide) instead of overflowing
+         * horizontally and pushing the wallet badge out of the clickable area.
+         * `min-w-0` prevents flex children from refusing to shrink.
+         */}
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap min-w-0">
           <NotificationBell count={0} />
           {address ? (
             <>
@@ -74,6 +86,7 @@ export default function Navbar() {
                 isConnecting={isConnecting}
                 providerName={selectedWallet?.label}
                 networkMismatch={networkMismatchMessage}
+                className="shrink-0"
               />
               <span
                 role="status"
