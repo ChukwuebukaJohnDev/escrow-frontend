@@ -96,7 +96,7 @@ export const Loading: Story = {
 export const Empty: Story = {
   name: "Empty - no theme data",
   args: {
-    isDarkMode: null as unknown as boolean,
+    isDarkMode: undefined,
     onToggle: () => {},
   },
 };
