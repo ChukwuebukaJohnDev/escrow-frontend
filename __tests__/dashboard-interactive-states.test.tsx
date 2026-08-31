@@ -136,7 +136,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const button = screen.getByRole("button", { name: "Search" });
+        const button = screen.getByRole("button", { name: "Submit search query" });
         expect(button).toHaveClass("focus-visible:ring-2");
         expect(button).toHaveClass("focus-visible:ring-indigo-500");
       });
@@ -159,7 +159,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const button = screen.getByRole("button", { name: "Search" });
+        const button = screen.getByRole("button", { name: "Submit search query" });
         expect(button).toHaveClass("hover:bg-indigo-500");
       });
     });
@@ -181,7 +181,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const button = screen.getByRole("button", { name: "Search" });
+        const button = screen.getByRole("button", { name: "Submit search query" });
         expect(button).toHaveClass("active:bg-indigo-700");
       });
     });
@@ -214,7 +214,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const buttons = screen.getAllByRole("button");
+        const buttons = screen.getAllByRole("tab");
         const allButton = buttons.find((btn) => btn.textContent === "All");
         expect(allButton).toHaveClass("bg-indigo-600");
         expect(allButton).toHaveClass("border-indigo-500");
@@ -247,7 +247,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const buttons = screen.getAllByRole("button");
+        const buttons = screen.getAllByRole("tab");
         const clientButton = buttons.find((btn) => btn.textContent === "As Client");
         expect(clientButton).toHaveClass("hover:text-white");
         expect(clientButton).toHaveClass("hover:border-gray-600");
@@ -281,7 +281,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const buttons = screen.getAllByRole("button");
+        const buttons = screen.getAllByRole("tab");
         const filterButton = buttons.find((btn) => btn.textContent === "As Client");
         expect(filterButton).toHaveClass("active:bg-gray-700");
       });
@@ -313,7 +313,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const buttons = screen.getAllByRole("button");
+        const buttons = screen.getAllByRole("tab");
         const filterButton = buttons.find((btn) => btn.textContent === "As Freelancer");
         expect(filterButton).toHaveClass("focus-visible:ring-2");
         expect(filterButton).toHaveClass("focus-visible:ring-indigo-500");
@@ -346,7 +346,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const buttons = screen.getAllByRole("button");
+        const buttons = screen.getAllByRole("tab");
         const filterButton = buttons.find((btn) => btn.textContent === "As Arbiter");
         expect(filterButton).toHaveClass("transition-all", "duration-200");
       });
@@ -511,7 +511,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const prevButton = screen.getByRole("button", { name: "Previous" });
+        const prevButton = screen.getByRole("button", { name: /Previous page/i });
         expect(prevButton).toHaveClass("focus-visible:ring-2");
         expect(prevButton).toHaveClass("focus-visible:ring-indigo-500");
       });
@@ -543,7 +543,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const prevButton = screen.getByRole("button", { name: "Previous" });
+        const prevButton = screen.getByRole("button", { name: /Previous page/i });
         expect(prevButton).toHaveClass("disabled:opacity-50");
         expect(prevButton).toHaveClass("disabled:cursor-not-allowed");
       });
@@ -575,7 +575,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const prevButton = screen.getByRole("button", { name: "Previous" });
+        const prevButton = screen.getByRole("button", { name: /Previous page/i });
         expect(prevButton).toHaveClass("disabled:hover:bg-gray-900");
         expect(prevButton).toHaveClass("disabled:hover:border-gray-700");
       });
@@ -607,7 +607,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const nextButton = screen.getByRole("button", { name: "Next" });
+        const nextButton = screen.getByRole("button", { name: /Next page/i });
         expect(nextButton).toHaveClass("hover:bg-gray-800");
         expect(nextButton).toHaveClass("hover:border-gray-600");
       });
@@ -639,7 +639,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const nextButton = screen.getByRole("button", { name: "Next" });
+        const nextButton = screen.getByRole("button", { name: /Next page/i });
         expect(nextButton).toHaveClass("active:bg-gray-700");
       });
     });
@@ -670,7 +670,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const nextButton = screen.getByRole("button", { name: "Next" });
+        const nextButton = screen.getByRole("button", { name: /Next page/i });
         expect(nextButton).toHaveClass("transition-all", "duration-200");
       });
     });
@@ -701,7 +701,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const prevButton = screen.getByRole("button", { name: "Previous" });
+        const prevButton = screen.getByRole("button", { name: /Previous page/i });
         expect(prevButton).toHaveClass("focus-visible:ring-offset-2");
         expect(prevButton).toHaveClass("focus-visible:ring-offset-gray-950");
       });
@@ -768,7 +768,7 @@ describe("Dashboard — interactive states (hover, focus, disabled)", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const prevButton = screen.getByRole("button", { name: "Previous" });
+        const prevButton = screen.getByRole("button", { name: /Previous page/i });
         expect(prevButton).toHaveClass("disabled:cursor-not-allowed");
       });
     });
