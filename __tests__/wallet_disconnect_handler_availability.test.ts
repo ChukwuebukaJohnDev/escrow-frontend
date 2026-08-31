@@ -3,6 +3,8 @@ import {
   detectWalletExtensionById,
   checkWalletAvailabilityById,
   disconnectWalletWithCheck,
+  runWalletDisconnectWithTimeout,
+  WalletDisconnectTimeoutError,
 } from "@/app/lib/wallet_disconnect_handler";
 
 // ---------------------------------------------------------------------------
@@ -307,5 +309,76 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck (#task-4)", () => 
     const logged = String(warnSpy.mock.calls[0][0]);
     expect(logged).toContain("[wallet_disconnect_handler]");
     expect(logged).toContain("not installed");
+  });
+});
+
+describe("wallet_disconnect_handler timeout bounds", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("aborts a stalled operation and clears payload and listeners", async () => {
+    let signal: AbortSignal | undefined;
+    const payload = new Uint8Array([1, 2, 3]);
+    const cleanup = vi.fn();
+    const operation = runWalletDisconnectWithTimeout(
+      (operationSignal) => {
+        signal = operationSignal;
+        return new Promise<never>(() => {});
+      },
+      { timeoutMs: 100, request: { payload }, cleanup },
+    );
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(operation).rejects.toBeInstanceOf(WalletDisconnectTimeoutError);
+    expect(signal?.aborted).toBe(true);
+    expect([...payload]).toEqual([0, 0, 0]);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("clears payload, listeners, and the timer when the operation succeeds", async () => {
+    const payload = new Uint8Array([4, 5]);
+    const cleanup = vi.fn();
+
+    await expect(
+      runWalletDisconnectWithTimeout(
+        async () => "disconnected",
+        { timeoutMs: 100, request: { payload }, cleanup },
+      ),
+    ).resolves.toBe("disconnected");
+
+    expect([...payload]).toEqual([0, 0]);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("returns a timeout error from disconnectWalletWithCheck and aborts its provider", async () => {
+    let signal: AbortSignal | undefined;
+    const payload = new Uint8Array([9]);
+    const cleanup = vi.fn();
+    const resultPromise = disconnectWalletWithCheck(
+      "freighter",
+      (operationSignal) => {
+        signal = operationSignal;
+        return new Promise<void>(() => {});
+      },
+      () => true,
+      { timeoutMs: 50, request: { payload }, cleanup },
+    );
+
+    await vi.advanceTimersByTimeAsync(50);
+    const result = await resultPromise;
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/timed out after 50ms/);
+    expect(signal?.aborted).toBe(true);
+    expect([...payload]).toEqual([0]);
+    expect(cleanup).toHaveBeenCalledOnce();
   });
 });
