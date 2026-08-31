@@ -5,6 +5,7 @@ import { ActionState } from "@/app/hooks/useActionStates";
 import CountdownTimer from "@/app/components/CountdownTimer";
 import TxStatusBanner from "@/app/components/TxStatusBanner";
 import ButtonSpinner from "@/app/components/ButtonSpinner";
+import DisputeRaiseModal from "@/app/components/DisputeRaiseModal";
 import { formatBaseUnits } from "@/app/lib/amounts";
 
 interface Milestone {
@@ -166,6 +167,9 @@ export default function MilestoneCard({
   const [partialAmount, setPartialAmount] = useState("");
   const [partialAmtError, setPartialAmtError] = useState<string | null>(null);
 
+  // Local state for the dispute raise modal
+  const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
+
   // Whether the auto-release deadline has passed. `mountedAt` is captured
   // once via a lazy initializer (mirrors CountdownTimer's own pattern) so
   // the render body never calls Date.now() directly; `liveElapsed` catches
@@ -225,6 +229,22 @@ export default function MilestoneCard({
     }
 
     onPartialRelease?.(milestone.index, trimmed);
+  }
+
+  /** Handler to open the dispute confirmation modal. */
+  function handleDisputeClick() {
+    setIsDisputeModalOpen(true);
+  }
+
+  /** Handler to confirm dispute from the modal. */
+  function handleDisputeConfirm() {
+    setIsDisputeModalOpen(false);
+    onDispute?.(milestone?.index ?? 0);
+  }
+
+  /** Handler to close the dispute modal. */
+  function handleDisputeModalClose() {
+    setIsDisputeModalOpen(false);
   }
 
   if (
@@ -454,7 +474,7 @@ export default function MilestoneCard({
           {(isClient || isFreelancer) &&
             ["Pending", "Delivered"].includes(milestone.status) && (
               <button
-                onClick={() => onDispute?.(milestone.index)}
+                onClick={handleDisputeClick}
                 disabled={!onDispute}
                 aria-disabled={!onDispute}
                 aria-label={`Dispute ${milestoneLabel}`}
@@ -583,6 +603,15 @@ export default function MilestoneCard({
           />
         </div>
       )}
+
+      {/* Dispute Raise Modal */}
+      <DisputeRaiseModal
+        isOpen={isDisputeModalOpen}
+        onClose={handleDisputeModalClose}
+        onConfirm={handleDisputeConfirm}
+        milestoneNumber={milestoneNumber}
+        isPending={false}
+      />
     </div>
   );
 }
