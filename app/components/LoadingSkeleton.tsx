@@ -1,3 +1,16 @@
+interface LoadingSkeletonProps {
+  className?: string;
+  /**
+   * Renders the skeleton as an activatable surface: it takes role="button",
+   * becomes focusable, and responds to click / Enter / Space.
+   */
+  interactive?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  "aria-label"?: string;
+  tabIndex?: number;
+}
+
 /**
  * Placeholder shown while job data loads.
  *
@@ -5,12 +18,41 @@
  * so the fixed widths stay on the element for structural assertions while
  * still collapsing on mobile.
  */
-export default function LoadingSkeleton() {
+export default function LoadingSkeleton({
+  className = "",
+  interactive = false,
+  disabled = false,
+  onClick,
+  "aria-label": ariaLabel,
+  tabIndex,
+}: LoadingSkeletonProps = {}) {
+  const interactiveClasses = interactive
+    ? "cursor-pointer transition-all duration-200 ease-in-out hover:border-gray-700 hover:bg-gray-900/90 hover:shadow-lg hover:shadow-gray-950/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950"
+    : "";
+
+  const disabledClasses = disabled
+    ? "opacity-50 cursor-not-allowed pointer-events-none"
+    : "";
+
   return (
     <div
-      className="animate-pulse animate-fade-in w-full"
-      role="status"
-      aria-live="polite"
+      className={`animate-pulse animate-fade-in w-full ${interactiveClasses} ${disabledClasses} ${className}`.trimEnd()}
+      role={interactive ? "button" : "status"}
+      aria-live={interactive ? undefined : "polite"}
+      aria-label={ariaLabel}
+      aria-disabled={disabled ? "true" : undefined}
+      tabIndex={interactive ? (disabled ? -1 : tabIndex ?? 0) : undefined}
+      onClick={!disabled ? onClick : undefined}
+      onKeyDown={
+        interactive && !disabled && onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       data-testid="loading-skeleton"
     >
       <span className="sr-only">Loading job data…</span>
