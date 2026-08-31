@@ -527,7 +527,11 @@ describe("DisputeRaiseModal behaviour (#332)", () => {
     const modal = screen.getByTestId(MODAL);
     expect(modal).toHaveAttribute("role", "dialog");
     expect(modal).toHaveAttribute("aria-modal", "true");
-    expect(modal).toHaveAttribute("aria-label", "Raise a dispute");
+    // #375 scopes the dialog label to the milestone under dispute.
+    expect(modal).toHaveAttribute(
+      "aria-label",
+      "Raise dispute for Milestone 2",
+    );
   });
 
   it("renders the dispute summary values", () => {
@@ -565,12 +569,14 @@ describe("DisputeRaiseModal behaviour (#332)", () => {
     const onConfirm = vi.fn();
     render(<DisputeRaiseModal {...defaultProps} onConfirm={onConfirm} />);
 
-    fireEvent.click(screen.getByTestId("dispute-raise-modal-confirm"));
+    // #375 blocks an empty reason by disabling the action outright, rather
+    // than accepting the click and surfacing an error afterwards.
+    const confirm = screen.getByTestId("dispute-raise-modal-confirm");
+    expect(confirm).toBeDisabled();
+
+    fireEvent.click(confirm);
 
     expect(onConfirm).not.toHaveBeenCalled();
-    expect(
-      screen.getByTestId("dispute-raise-modal-validation-error"),
-    ).toBeInTheDocument();
   });
 
   it("confirms with the trimmed reason once it is long enough", () => {
@@ -595,7 +601,7 @@ describe("DisputeRaiseModal behaviour (#332)", () => {
     render(<DisputeRaiseModal {...defaultProps} isSubmitting />);
     const confirm = screen.getByTestId("dispute-raise-modal-confirm");
     expect(confirm.querySelector("svg")).not.toBeNull();
-    expect(confirm).toHaveTextContent(/raising dispute/i);
+    expect(confirm).toHaveTextContent(/submitting/i);
   });
 
   it("renders a provider error message", () => {
