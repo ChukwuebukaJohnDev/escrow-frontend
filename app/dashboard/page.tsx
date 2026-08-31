@@ -5,6 +5,7 @@ import { useWallet } from "@/app/context/WalletContext";
 import Navbar from "@/app/components/Navbar";
 import MilestoneCard from "@/app/components/MilestoneCard";
 import LoadingSkeleton from "@/app/components/LoadingSkeleton";
+import DisputeRaiseModal from "@/app/components/DisputeRaiseModal";
 import { useActionStates } from "@/app/hooks/useActionStates";
 import { useToast } from "@/app/context/ToastContext";
 import {
@@ -149,6 +150,8 @@ export default function Dashboard() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false);
+  const [disputeMilestoneIndex, setDisputeMilestoneIndex] = useState<number | null>(null);
 
   const { getState, isPending, setPhase, setError: setActionError, setTxHash } =
     useActionStates();
@@ -401,8 +404,22 @@ export default function Dashboard() {
     showToast(`Approve milestone ${i + 1} (wired to contract soon)`, "info");
   };
 
-  const handleDispute = async (i: number) => {
-    showToast(`Dispute milestone ${i + 1} (wired to contract soon)`, "info");
+  const handleDispute = (i: number) => {
+    setDisputeMilestoneIndex(i);
+    setDisputeModalOpen(true);
+  };
+
+  const handleDisputeSubmit = async (reason: string) => {
+    if (!address || disputeMilestoneIndex === null) return;
+
+    await executeTx(`dispute-${disputeMilestoneIndex}`, "raise_dispute", [
+      { type: "address", value: address },
+      { type: "u32", value: disputeMilestoneIndex.toString() },
+      { type: "string", value: reason },
+    ]);
+
+    setDisputeModalOpen(false);
+    setDisputeMilestoneIndex(null);
   };
 
   const handleResolveDispute = async (index: number, releaseToFreelancer: boolean) => {
@@ -649,6 +666,21 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      {/* Dispute Raise Modal */}
+      {disputeMilestoneIndex !== null && (
+        <DisputeRaiseModal
+          isOpen={disputeModalOpen}
+          onClose={() => {
+            setDisputeModalOpen(false);
+            setDisputeMilestoneIndex(null);
+          }}
+          onSubmit={handleDisputeSubmit}
+          milestoneIndex={disputeMilestoneIndex}
+          isLoading={isPending(`dispute-${disputeMilestoneIndex}`)}
+          submissionError={getState(`dispute-${disputeMilestoneIndex}`)?.error}
+        />
+      )}
     </div>
   );
 }
