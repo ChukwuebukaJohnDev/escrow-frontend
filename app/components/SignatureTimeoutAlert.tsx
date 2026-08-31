@@ -68,8 +68,6 @@ export default function SignatureTimeoutAlert({
     });
   }, [activeError, hasTimeout, networkMismatchMessage, transactionId]);
 
-  // Derived state: parse failures are computed on render instead of being
-  // written to state from an effect (avoids cascading renders).
   const parseMessage = useMemo(() => {
     if (!activeTransactionXdr) return null;
 

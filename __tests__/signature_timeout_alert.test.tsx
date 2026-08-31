@@ -4,40 +4,6 @@ import SignatureTimeoutAlert from "@/app/components/SignatureTimeoutAlert";
 import WalletLoaderOverlay from "@/app/components/WalletLoaderOverlay";
 import { endWalletOperation, startWalletOperation } from "@/app/lib/wallet_state_context";
 
-// WalletProvider pulls @creit.tech/stellar-wallets-kit at module scope, whose
-// bundled UMD dependencies are not Node-ESM-importable. These suites never
-// exercise provider-driven wallet state (they render the components with bare
-// props), so `useWallet` is stubbed with the same defaults the real
-// WalletContext provides via `createContext`. The real wallet library modules
-// (wallet_state_context, freighter_connector, albedo_connector,
-// ledger_usb_bridge) stay under test.
-const walletContextMock = vi.hoisted(() => ({
-  useWallet: () => ({
-    address: null,
-    assembleMultiSigTransaction: vi.fn(async () => ({
-      uniqueSigners: 0,
-      splitsValidated: 0,
-    })),
-    connect: vi.fn(async () => {}),
-    disconnect: vi.fn(),
-    isConnecting: false,
-    networkMismatchMessage: null,
-    selectedWalletId: "albedo",
-    setSelectedWalletId: vi.fn(),
-    signTransaction: vi.fn(async () => ""),
-    signatureTimeoutError: null,
-    signatureTimeoutXdr: null,
-    clearSignatureTimeout: vi.fn(),
-    simulationResult: null,
-    setSimulationResult: vi.fn(),
-    gasWarning: null,
-  }),
-}));
-
-vi.mock("@/app/context/WalletContext", () => ({
-  useWallet: walletContextMock.useWallet,
-}));
-
 describe("SignatureTimeoutAlert", () => {
   it("renders timeout details and logs a formatted stack trace", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -88,13 +54,12 @@ describe("SignatureTimeoutAlert", () => {
 
   it("keeps the loader counter balanced when an external operation is active", async () => {
     render(<WalletLoaderOverlay />);
-    act(() => {
-      startWalletOperation();
-    });
+    // The overlay subscribes to module-level wallet state, so these calls
+    // update React from outside the render cycle; act() flushes them before
+    // the assertions read the DOM.
+    act(() => startWalletOperation());
     expect(screen.getByTestId("wallet-loader-overlay")).toBeInTheDocument();
-    act(() => {
-      endWalletOperation();
-    });
+    act(() => endWalletOperation());
     await waitFor(() => expect(screen.queryByTestId("wallet-loader-overlay")).not.toBeInTheDocument());
   });
 });

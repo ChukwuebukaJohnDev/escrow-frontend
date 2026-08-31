@@ -1,40 +1,32 @@
 import "@testing-library/jest-dom/vitest";
 
-// jsdom environment: normalize the web-storage globals across Node versions.
-// Newer Node releases ship an experimental `localStorage` global that is
-// `undefined` unless `--localstorage-file` is passed; that value shadows the
-// jsdom implementation in vitest, crashing tests that read bare
-// `localStorage`. When the jsdom-provided global did not install, fall back
-// to an in-memory Storage so the API stays available and testable.
-if (typeof globalThis.localStorage === "undefined") {
-  function createMemoryStorage(): Storage {
+if (typeof window !== "undefined") {
+  const createLocalStorageMock = () => {
     const store = new Map<string, string>();
     return {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, String(value)),
+      removeItem: (key: string) => store.delete(key),
+      clear: () => store.clear(),
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
       get length() {
         return store.size;
       },
-      clear() {
-        store.clear();
-      },
-      getItem(key: string) {
-        const value = store.get(key);
-        return value === undefined ? null : value;
-      },
-      key(index: number) {
-        return Array.from(store.keys())[index] ?? null;
-      },
-      removeItem(key: string) {
-        store.delete(key);
-      },
-      setItem(key: string, value: string) {
-        store.set(key, String(value));
-      },
     };
-  }
+  };
 
-  Object.defineProperty(globalThis, "localStorage", {
-    value: createMemoryStorage(),
-    configurable: true,
-    writable: true,
-  });
+  if (!window.localStorage) {
+    const localStorageMock = createLocalStorageMock();
+    Object.defineProperty(window, "localStorage", {
+      value: localStorageMock,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", {
+      value: localStorageMock,
+      writable: true,
+      configurable: true,
+    });
+  }
 }
+
