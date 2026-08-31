@@ -60,10 +60,10 @@ describe("LoadingSkeleton — outer card structure", () => {
     expect(card).toHaveClass("rounded-xl");
   });
 
-  it("outer card has 'bg-gray-900' background class", () => {
+  it("outer card has 'bg-surface-card' background class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    expect(card).toHaveClass("bg-gray-900");
+    expect(card).toHaveClass("bg-surface-card");
   });
 
   it("outer card has 'p-6' padding class", () => {
@@ -91,11 +91,11 @@ describe("LoadingSkeleton — header placeholder nodes", () => {
     expect(headerBar).toBeInTheDocument();
   });
 
-  it("header title placeholder has 'bg-gray-800' class", () => {
+  it("header title placeholder has 'bg-surface-field' class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const headerBar = card?.querySelector(".h-6.w-32");
-    expect(headerBar).toHaveClass("bg-gray-800");
+    expect(headerBar).toHaveClass("bg-surface-field");
   });
 
   it("header title placeholder has 'rounded' class", () => {
@@ -112,11 +112,11 @@ describe("LoadingSkeleton — header placeholder nodes", () => {
     expect(subtitleBar).toBeInTheDocument();
   });
 
-  it("header subtitle placeholder has 'bg-gray-800' class", () => {
+  it("header subtitle placeholder has 'bg-surface-field' class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const subtitleBar = card?.querySelector(".h-4.w-24");
-    expect(subtitleBar).toHaveClass("bg-gray-800");
+    expect(subtitleBar).toHaveClass("bg-surface-field");
   });
 
   it("header subtitle placeholder has 'rounded' class", () => {
@@ -135,14 +135,14 @@ describe("LoadingSkeleton — stat card placeholder nodes", () => {
   it("renders exactly 3 stat card placeholders", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    const statCards = card?.querySelectorAll(".bg-gray-800.rounded-lg.p-3");
+    const statCards = card?.querySelectorAll(".bg-surface-field.rounded-lg.p-3");
     expect(statCards).toHaveLength(3);
   });
 
   it("each stat card contains a label placeholder", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    const statCards = card?.querySelectorAll(".bg-gray-800.rounded-lg.p-3");
+    const statCards = card?.querySelectorAll(".bg-surface-field.rounded-lg.p-3");
     statCards?.forEach((statCard) => {
       const label = statCard.querySelector(".h-4.w-12");
       expect(label).toBeInTheDocument();
@@ -152,37 +152,37 @@ describe("LoadingSkeleton — stat card placeholder nodes", () => {
   it("each stat card contains a value placeholder", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    const statCards = card?.querySelectorAll(".bg-gray-800.rounded-lg.p-3");
+    const statCards = card?.querySelectorAll(".bg-surface-field.rounded-lg.p-3");
     statCards?.forEach((statCard) => {
       const value = statCard.querySelector(".h-4.w-28");
       expect(value).toBeInTheDocument();
     });
   });
 
-  it("stat card label placeholders have 'bg-gray-700' class", () => {
+  it("stat card label placeholders have 'bg-border-subtle' class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    const statCards = card?.querySelectorAll(".bg-gray-800.rounded-lg.p-3");
+    const statCards = card?.querySelectorAll(".bg-surface-field.rounded-lg.p-3");
     statCards?.forEach((statCard) => {
       const label = statCard.querySelector(".h-4.w-12");
-      expect(label).toHaveClass("bg-gray-700");
+      expect(label).toHaveClass("bg-border-subtle");
     });
   });
 
-  it("stat card value placeholders have 'bg-gray-700' class", () => {
+  it("stat card value placeholders have 'bg-border-subtle' class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    const statCards = card?.querySelectorAll(".bg-gray-800.rounded-lg.p-3");
+    const statCards = card?.querySelectorAll(".bg-surface-field.rounded-lg.p-3");
     statCards?.forEach((statCard) => {
       const value = statCard.querySelector(".h-4.w-28");
-      expect(value).toHaveClass("bg-gray-700");
+      expect(value).toHaveClass("bg-border-subtle");
     });
   });
 
   it("stat card label placeholders have 'rounded' class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    const statCards = card?.querySelectorAll(".bg-gray-800.rounded-lg.p-3");
+    const statCards = card?.querySelectorAll(".bg-surface-field.rounded-lg.p-3");
     statCards?.forEach((statCard) => {
       const label = statCard.querySelector(".h-4.w-12");
       expect(label).toHaveClass("rounded");
@@ -199,7 +199,7 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-gray-800.rounded-lg.p-4.bg-gray-900"
+      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
     );
     expect(milestoneCards).toHaveLength(2);
   });
@@ -208,7 +208,7 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-gray-800.rounded-lg.p-4.bg-gray-900"
+      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
     );
     milestoneCards?.forEach((mc) => {
       const label = mc.querySelector(".h-4.w-24");
@@ -220,7 +220,7 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-gray-800.rounded-lg.p-4.bg-gray-900"
+      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
     );
     milestoneCards?.forEach((mc) => {
       const value = mc.querySelector(".h-4.w-32");
@@ -228,27 +228,27 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     });
   });
 
-  it("milestone card label bars have 'bg-gray-800' class", () => {
+  it("milestone card label bars have 'bg-surface-field' class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-gray-800.rounded-lg.p-4.bg-gray-900"
+      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
     );
     milestoneCards?.forEach((mc) => {
       const label = mc.querySelector(".h-4.w-24");
-      expect(label).toHaveClass("bg-gray-800");
+      expect(label).toHaveClass("bg-surface-field");
     });
   });
 
-  it("milestone card value bars have 'bg-gray-800' class", () => {
+  it("milestone card value bars have 'bg-surface-field' class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-gray-800.rounded-lg.p-4.bg-gray-900"
+      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
     );
     milestoneCards?.forEach((mc) => {
       const value = mc.querySelector(".h-4.w-32");
-      expect(value).toHaveClass("bg-gray-800");
+      expect(value).toHaveClass("bg-surface-field");
     });
   });
 });
