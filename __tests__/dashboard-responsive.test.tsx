@@ -150,7 +150,7 @@ describe("Dashboard — responsive design", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const button = screen.getByRole("button", { name: "Search" });
+        const button = screen.getByRole("button", { name: "Submit search query" });
         expect(button).toHaveClass("w-full", "sm:w-auto");
       });
     });
@@ -181,7 +181,7 @@ describe("Dashboard — responsive design", () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        const filterButtons = screen.getAllByRole("button");
+        const filterButtons = screen.getAllByRole("tab");
         const roleButton = filterButtons.find((btn) => btn.textContent === "All");
         expect(roleButton).toHaveClass("px-2.5", "sm:px-3");
       });
