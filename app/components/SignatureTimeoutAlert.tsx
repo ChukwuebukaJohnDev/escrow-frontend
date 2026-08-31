@@ -87,6 +87,22 @@ export default function SignatureTimeoutAlert({
     });
   }, [activeError, hasTimeout, networkMismatchMessage, transactionId]);
 
+ Write-React-Testing-Library-assertions-for-wallet-disconnect-handler-#242-FIX
+
+  const parseMessage = useMemo(() => {
+    if (!activeTransactionXdr) return null;
+
+    try {
+      parseMultiSigEnvelope(activeTransactionXdr, {
+        parseEnvelopeXdr: createStellarEnvelopeParser(NETWORK_PASSPHRASE),
+      });
+      return null;
+    } catch (parseError) {
+      return parseError instanceof Error ? parseError.message : String(parseError);
+    }
+  }, [activeTransactionXdr]);
+
+
   if (!hasTimeout && !networkMismatchMessage) return null;
 
   async function retry() {

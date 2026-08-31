@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import SignatureTimeoutAlert from "@/app/components/SignatureTimeoutAlert";
 import WalletLoaderOverlay from "@/app/components/WalletLoaderOverlay";
@@ -54,6 +54,7 @@ describe("SignatureTimeoutAlert", () => {
 
   it("keeps the loader counter balanced when an external operation is active", async () => {
     render(<WalletLoaderOverlay />);
+ Write-React-Testing-Library-assertions-for-wallet-disconnect-handler-#242-FIX
     startWalletOperation();
     // `startWalletOperation` notifies subscribers synchronously, but the
     // overlay's resulting `setIsLoading` is a React state update — it only
@@ -62,6 +63,14 @@ describe("SignatureTimeoutAlert", () => {
       expect(screen.getByTestId("wallet-loader-overlay")).toBeInTheDocument()
     );
     endWalletOperation();
+
+    // The overlay subscribes to module-level wallet state, so these calls
+    // update React from outside the render cycle; act() flushes them before
+    // the assertions read the DOM.
+    act(() => startWalletOperation());
+    expect(screen.getByTestId("wallet-loader-overlay")).toBeInTheDocument();
+    act(() => endWalletOperation());
+
     await waitFor(() => expect(screen.queryByTestId("wallet-loader-overlay")).not.toBeInTheDocument());
   });
 });
