@@ -208,7 +208,15 @@ describe("WalletSelectorModal wallet availability (#103)", () => {
 
 describe("WalletSelectorModal design tokens", () => {
   it("uses semantic design token classes for modal shell and alert surfaces", () => {
-    render(<WalletSelectorModal isOpen={true} onClose={vi.fn()} />);
+    // `errorMessage` defaults to null, and the error surface only renders when
+    // it is set - pass one so the alert this case asserts on is in the tree.
+    render(
+      <WalletSelectorModal
+        isOpen={true}
+        onClose={vi.fn()}
+        errorMessage="Unable to reach the wallet."
+      />
+    );
 
     const backdrop = screen.getByTestId("wallet-selector-modal");
     expect(backdrop).toHaveClass("bg-surface-page/80");
@@ -241,10 +249,13 @@ describe("WalletSelectorModal design tokens", () => {
 
   it("uses design-token classes for wallet rows and status badges", () => {
     render(
+      // The connected badge is gated on `activeAddress !== null` as well as
+      // the row being the selected wallet, so both props are needed here.
       <WalletSelectorModal
         isOpen={true}
         onClose={vi.fn()}
         selectedWalletId="freighter"
+        activeAddress="GA6HCMBLTZS5VYYBCATRBRZ3BZJMAFUDKYYF6AH6MVCMGWMRDNSWJPIH"
       />
     );
 
