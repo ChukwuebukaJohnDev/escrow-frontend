@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import WalletBadge, { formatAddress, isValidStellarAddress } from "@/app/components/WalletBadge";
-import WalletBadge, { formatAddress } from "@/app/components/WalletBadge";
+import WalletBadge, {
+  formatAddress,
+  isValidStellarAddress,
+} from "@/app/components/WalletBadge";
 
 describe("formatAddress helper", () => {
   it("truncates standard Stellar public address to G...1234 format", () => {
