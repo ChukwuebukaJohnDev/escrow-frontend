@@ -66,16 +66,16 @@ describe("LoadingSkeleton — outer card structure", () => {
     expect(card).toHaveClass("bg-surface-card");
   });
 
-  it("outer card has 'p-6' padding class", () => {
+  it("outer card has 'sm:p-6' padding class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    expect(card).toHaveClass("p-6");
+    expect(card).toHaveClass("sm:p-6");
   });
 
-  it("outer card has 'space-y-6' spacing class", () => {
+  it("outer card has 'sm:space-y-6' spacing class", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
-    expect(card).toHaveClass("space-y-6");
+    expect(card).toHaveClass("sm:space-y-6");
   });
 });
 
@@ -199,7 +199,7 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
+      '[data-testid^="skeleton-milestone-card-"]'
     );
     expect(milestoneCards).toHaveLength(2);
   });
@@ -208,7 +208,7 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
+      '[data-testid^="skeleton-milestone-card-"]'
     );
     milestoneCards?.forEach((mc) => {
       const label = mc.querySelector(".h-4.w-24");
@@ -220,7 +220,7 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
+      '[data-testid^="skeleton-milestone-card-"]'
     );
     milestoneCards?.forEach((mc) => {
       const value = mc.querySelector(".h-4.w-32");
@@ -232,7 +232,7 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
+      '[data-testid^="skeleton-milestone-card-"]'
     );
     milestoneCards?.forEach((mc) => {
       const label = mc.querySelector(".h-4.w-24");
@@ -244,7 +244,7 @@ describe("LoadingSkeleton — milestone card placeholder nodes", () => {
     const { container } = render(<LoadingSkeleton />);
     const card = container.querySelector('[aria-hidden="true"]');
     const milestoneCards = card?.querySelectorAll(
-      ".border.border-border-strong.rounded-lg.p-4.bg-surface-card"
+      '[data-testid^="skeleton-milestone-card-"]'
     );
     milestoneCards?.forEach((mc) => {
       const value = mc.querySelector(".h-4.w-32");
