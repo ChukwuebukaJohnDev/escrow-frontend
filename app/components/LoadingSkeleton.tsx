@@ -8,7 +8,7 @@
 export default function LoadingSkeleton() {
     return (
         <div
-            className="animate-pulse w-full"
+            className="animate-pulse animate-fade-in w-full"
             role="status"
             aria-live="polite"
             data-testid="loading-skeleton"
@@ -37,7 +37,7 @@ export default function LoadingSkeleton() {
                     data-testid="skeleton-stats-grid"
                 >
                     <div
-                        className="bg-surface-field rounded-lg p-3"
+                        className="bg-surface-field rounded-lg p-3 animate-pulse [animation-delay:100ms]"
                         data-testid="skeleton-stat-card-0"
                     >
                         <div
@@ -50,7 +50,7 @@ export default function LoadingSkeleton() {
                         ></div>
                     </div>
                     <div
-                        className="bg-surface-field rounded-lg p-3"
+                        className="bg-surface-field rounded-lg p-3 animate-pulse [animation-delay:175ms]"
                         data-testid="skeleton-stat-card-1"
                     >
                         <div
@@ -63,7 +63,7 @@ export default function LoadingSkeleton() {
                         ></div>
                     </div>
                     <div
-                        className="bg-surface-field rounded-lg p-3"
+                        className="bg-surface-field rounded-lg p-3 animate-pulse [animation-delay:250ms]"
                         data-testid="skeleton-stat-card-2"
                     >
                         <div
@@ -82,7 +82,7 @@ export default function LoadingSkeleton() {
                     data-testid="skeleton-milestones"
                 >
                     <div
-                        className="border border-border-strong rounded-lg p-3 sm:p-4 bg-surface-card"
+                        className="border border-border-strong rounded-lg p-3 sm:p-4 bg-surface-card animate-pulse [animation-delay:325ms]"
                         data-testid="skeleton-milestone-card-0"
                     >
                         <div
@@ -95,7 +95,7 @@ export default function LoadingSkeleton() {
                         ></div>
                     </div>
                     <div
-                        className="border border-border-strong rounded-lg p-3 sm:p-4 bg-surface-card"
+                        className="border border-border-strong rounded-lg p-3 sm:p-4 bg-surface-card animate-pulse [animation-delay:400ms]"
                         data-testid="skeleton-milestone-card-1"
                     >
                         <div
