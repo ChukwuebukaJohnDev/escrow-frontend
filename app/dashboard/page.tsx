@@ -5,7 +5,7 @@ import { useWallet } from "@/app/context/WalletContext";
 import Navbar from "@/app/components/Navbar";
 import MilestoneCard from "@/app/components/MilestoneCard";
 import LoadingSkeleton from "@/app/components/LoadingSkeleton";
-import EmptyState from "@/app/components/EmptyState";
+import EmptyStateCard from "@/app/components/EmptyStateCard";
 import { useActionStates } from "@/app/hooks/useActionStates";
 import { useToast } from "@/app/context/ToastContext";
 import {
@@ -492,10 +492,13 @@ export default function Dashboard() {
                 Error: {error}
               </div>
             ) : jobs.length === 0 ? (
-              <EmptyState
+              <EmptyStateCard
+                testId="dashboard-empty-state"
+                ariaLabel="No jobs"
                 title="No jobs found"
-                description="You don't have any escrow jobs for this wallet yet. Create one to get started."
-                icon="🗂️"
+                description="You don't have any jobs yet. Connect your wallet to see jobs you're involved in as a client, freelancer, or arbiter. Create one to get started."
+                icon="briefcase"
+                badges={["Client", "Freelancer", "Arbiter"]}
               />
             ) : (
               <div className="space-y-5">
