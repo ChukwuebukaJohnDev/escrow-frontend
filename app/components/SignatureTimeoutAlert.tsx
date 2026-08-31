@@ -68,17 +68,26 @@ export default function SignatureTimeoutAlert({
     });
   }, [activeError, hasTimeout, networkMismatchMessage, transactionId]);
 
+  useEffect(() => {
+    if (!activeTransactionXdr) {
+      return;
+    }
   const parseMessage = useMemo(() => {
     if (!activeTransactionXdr) return null;
 
+    let nextMessage: string | null = null;
     try {
       parseMultiSigEnvelope(activeTransactionXdr, {
         parseEnvelopeXdr: createStellarEnvelopeParser(NETWORK_PASSPHRASE),
       });
+    } catch (parseError) {
+      nextMessage =
+        parseError instanceof Error ? parseError.message : String(parseError);
       return null;
     } catch (parseError) {
       return parseError instanceof Error ? parseError.message : String(parseError);
     }
+    setParseMessage(nextMessage);
   }, [activeTransactionXdr]);
 
   if (!hasTimeout && !networkMismatchMessage) return null;

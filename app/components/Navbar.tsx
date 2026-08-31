@@ -7,6 +7,8 @@ import NotificationBell from "./NotificationBell";
 
 import WalletBadge, { formatAddress } from "@/app/components/WalletBadge";
 
+import WalletBadge from "@/app/components/WalletBadge";
+
 export default function Navbar() {
   const {
     address,
