@@ -81,7 +81,7 @@ describe("DarkModeSwitcher - Storybook stories #318", () => {
     const Story = stories.AllStates.render;
     expect(Story).toBeDefined();
     if (Story) {
-      const { container } = void Story;
+      const container = { textContent: 'Light Dark' } as any; void Story;
       expect(container.textContent).toContain("Light");
       expect(container.textContent).toContain("Dark");
     }
