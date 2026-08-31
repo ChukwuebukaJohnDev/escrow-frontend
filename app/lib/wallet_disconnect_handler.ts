@@ -13,6 +13,67 @@
 
 const LOG_PREFIX = "[wallet_disconnect_handler]";
 
+export const DEFAULT_WALLET_DISCONNECT_TIMEOUT_MS = 60_000;
+
+export interface WalletDisconnectRequest {
+  payload?: Uint8Array | null;
+}
+
+export class WalletDisconnectTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`Wallet disconnect timed out after ${timeoutMs}ms`);
+    this.name = "WalletDisconnectTimeoutError";
+  }
+}
+
+export function clearWalletDisconnectMemory(
+  request: WalletDisconnectRequest,
+): WalletDisconnectRequest {
+  if (request.payload) request.payload.fill(0);
+  request.payload = null;
+  return request;
+}
+
+export interface WalletDisconnectTimeoutOptions {
+  timeoutMs?: number;
+  request?: WalletDisconnectRequest;
+  cleanup?: () => void;
+}
+
+export function runWalletDisconnectWithTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  options: WalletDisconnectTimeoutOptions = {},
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_WALLET_DISCONNECT_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return Promise.reject(new RangeError("timeoutMs must be a positive number"));
+  }
+
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new WalletDisconnectTimeoutError(timeoutMs));
+    }, timeoutMs);
+  });
+  const operationPromise = Promise.resolve().then(() => operation(controller.signal));
+
+  const resultPromise = (async () => {
+    try {
+      return await Promise.race([operationPromise, timeoutPromise]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      if (options.request) clearWalletDisconnectMemory(options.request);
+      options.cleanup?.();
+    }
+  })();
+
+  resultPromise.catch(() => {});
+  return resultPromise;
+}
+
 // =============================================================
 // Wallet availability detection
 // =============================================================
@@ -112,9 +173,9 @@ export function checkWalletAvailabilityById(
       installUrl: INSTALL_URLS[walletId] ?? null,
     };
   } catch (err) {
-    console.warn(
-      `${LOG_PREFIX} AVAILABILITY CHECK FAILED for ${walletId}:`,
-      err instanceof Error ? err.message : String(err),
+    console.error(
+      `${LOG_PREFIX} AVAILABILITY CHECK FAILED for "${walletId}":`,
+      err,
     );
 
     return {
@@ -124,6 +185,237 @@ export function checkWalletAvailabilityById(
       installUrl: INSTALL_URLS[walletId] ?? null,
     };
   }
+}
+
+// =============================================================
+// Active wallet session state persistence (#237)
+// =============================================================
+
+export const WALLET_DISCONNECT_ACTIVE_KEYS_STORAGE_KEY = "wallet_disconnect_active_keys";
+export const WALLET_DISCONNECT_SCHEMA_VERSION = 1;
+
+export interface WalletActiveKey {
+  walletId: string;
+  address: string;
+  connectedAt: number;
+}
+
+interface WalletActiveKeysSerializedV1 {
+  version: 1;
+  activeKeys: WalletActiveKey[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isValidWalletActiveKey(value: unknown): value is WalletActiveKey {
+  if (!isRecord(value)) return false;
+  if (typeof value.walletId !== "string" || value.walletId.length === 0) return false;
+  if (typeof value.address !== "string" || value.address.length === 0) return false;
+  if (typeof value.connectedAt !== "number" || !Number.isFinite(value.connectedAt)) return false;
+  return true;
+}
+
+function sanitizeWalletActiveKey(value: unknown): WalletActiveKey | null {
+  if (!isValidWalletActiveKey(value)) return null;
+  return {
+    walletId: value.walletId,
+    address: value.address,
+    connectedAt: value.connectedAt,
+  };
+}
+
+/**
+ * Validates the persisted *envelope* only - that it is a record carrying a
+ * recognised schema version and an activeKeys array.
+ *
+ * Individual entries are deliberately not checked here: rehydrate() maps them
+ * through sanitizeWalletActiveKey and drops the ones that fail, so one corrupt
+ * entry costs the user only that entry rather than the whole store. Rejecting
+ * the payload here on a single bad entry would make that filtering
+ * unreachable.
+ */
+function isValidSerializedPayload(
+  value: unknown
+): value is WalletActiveKeysSerializedV1 {
+  if (!isRecord(value)) return false;
+  if (value.version !== WALLET_DISCONNECT_SCHEMA_VERSION) return false;
+  if (!Array.isArray(value.activeKeys)) return false;
+  return true;
+}
+
+function getStorageAdapter(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const testKey = "__wallet_disconnect_storage_test__";
+    window.localStorage.setItem(testKey, "1");
+    window.localStorage.removeItem(testKey);
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export class WalletActiveKeysStore {
+  private activeKeys: WalletActiveKey[] = [];
+  private storage: Storage | null;
+
+  constructor(storageOverride?: Storage | null) {
+    this.storage =
+      storageOverride !== undefined ? storageOverride : getStorageAdapter();
+    this.rehydrate();
+  }
+
+  private persist(): void {
+    if (!this.storage) return;
+    try {
+      if (this.activeKeys.length > 0) {
+        const payload: WalletActiveKeysSerializedV1 = {
+          version: WALLET_DISCONNECT_SCHEMA_VERSION,
+          activeKeys: this.activeKeys,
+        };
+        this.storage.setItem(
+          WALLET_DISCONNECT_ACTIVE_KEYS_STORAGE_KEY,
+          JSON.stringify(payload)
+        );
+      } else {
+        this.storage.removeItem(WALLET_DISCONNECT_ACTIVE_KEYS_STORAGE_KEY);
+      }
+    } catch (err) {
+      console.warn(
+        `${LOG_PREFIX} PERSIST FAILED`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
+  /**
+   * Re-reads persisted state from storage into memory. Public because
+   * simulating a reload (which triggers rehydration) is a legitimate
+   * externally-verifiable behavior: consumers and tests both need to
+   * confirm that a freshly-bootstrapped store correctly restores its
+   * state from whatever is in storage right now.
+   */
+  rehydrate(): void {
+    this.activeKeys = [];
+    if (!this.storage) return;
+    try {
+      const raw = this.storage.getItem(WALLET_DISCONNECT_ACTIVE_KEYS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!isValidSerializedPayload(parsed)) {
+        console.warn(
+          `${LOG_PREFIX} REHYDRATE SCHEMA MISMATCH`,
+          "Persisted active keys data failed validation, falling back to clean state."
+        );
+        this.storage.removeItem(WALLET_DISCONNECT_ACTIVE_KEYS_STORAGE_KEY);
+        return;
+      }
+      const sanitized = parsed.activeKeys
+        .map(sanitizeWalletActiveKey)
+        .filter((k): k is WalletActiveKey => k !== null);
+
+      // Surface partial corruption: the good entries are still restored, but
+      // silently dropping the bad ones would hide a real storage problem.
+      const dropped = parsed.activeKeys.length - sanitized.length;
+      if (dropped > 0) {
+        console.warn(
+          `${LOG_PREFIX} REHYDRATE DROPPED ENTRIES`,
+          `Discarded ${dropped} malformed active key entr${
+            dropped === 1 ? "y" : "ies"
+          }; restored ${sanitized.length}.`
+        );
+      }
+
+      this.activeKeys = sanitized;
+    } catch (err) {
+      console.warn(
+        `${LOG_PREFIX} REHYDRATE FAILED`,
+        err instanceof Error ? err.message : String(err)
+      );
+      try {
+        this.storage.removeItem(WALLET_DISCONNECT_ACTIVE_KEYS_STORAGE_KEY);
+      } catch {
+        // no-op — best effort cleanup
+      }
+    }
+  }
+
+  /**
+   * Replaces the storage backend used by this store instance and
+   * immediately re-reads state from the new backend. Intended as a
+   * narrow test-support seam so tests can supply an in-memory Storage
+   * mock without reaching into the private `storage` field. Safe to
+   * call at runtime as well (e.g. to swap to sessionStorage in a
+   * security-sensitive mode).
+   */
+  overrideStorage(nextStorage: Storage | null): void {
+    this.storage = nextStorage;
+    this.rehydrate();
+  }
+
+  addActiveKey(key: WalletActiveKey): void {
+    const sanitized = sanitizeWalletActiveKey(key);
+    if (!sanitized) return;
+    
+    // Remove existing entry for the same wallet IDs to avoid duplicates
+    this.activeKeys = this.activeKeys.filter(k => k.walletId !== sanitized.walletId);
+    this.activeKeys.push(sanitized);
+    this.persist();
+  }
+
+  removeActiveKey(walletId: string): void {
+    this.activeKeys = this.activeKeys.filter(k => k.walletId !== walletId);
+    this.persist();
+  }
+
+  getActiveKeys(): WalletActiveKey[] {
+    return this.activeKeys.map(k => ({
+      walletId: k.walletId,
+      address: k.address,
+      connectedAt: k.connectedAt,
+    }));
+  }
+
+  hasActiveKey(walletId: string): boolean {
+    return this.activeKeys.some(k => k.walletId === walletId);
+  }
+
+  clear(): void {
+    this.activeKeys = [];
+    if (this.storage) {
+      try {
+        this.storage.removeItem(WALLET_DISCONNECT_ACTIVE_KEYS_STORAGE_KEY);
+      } catch (err) {
+        console.warn(
+          `${LOG_PREFIX} CLEAR STORAGE FAILED`,
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    }
+  }
+}
+
+export const walletActiveKeysStore = new WalletActiveKeysStore();
+
+/**
+ * Registers an active wallet key in the persistent store. This should be
+ * called when a wallet successfully connects so the disconnect handler can
+ * track which wallets are currently active across reload cycles.
+ *
+ * @param walletId - The wallet provider ID.
+ * @param address - The wallet address.
+ */
+export function registerActiveWalletKey(
+  walletId: string,
+  address: string
+): void {
+  walletActiveKeysStore.addActiveKey({
+    walletId,
+    address,
+    connectedAt: Date.now(),
+  });
 }
 
 // =============================================================
@@ -145,6 +437,20 @@ export interface WalletDisconnectResult {
 }
 
 /**
+ * Snapshot of an in-flight transaction at the moment a disconnect is
+ * triggered.  All fields are optional so callers can supply whatever
+ * identifying info they have without fabricating values.
+ */
+export interface PendingTxSnapshot {
+  /** Transaction hash / id (XDR hash, ledger hash, or any stable identifier). */
+  txId?: string;
+  /** Human-readable status label (e.g. "signing", "submitted", "pending"). */
+  status?: string;
+  /** Additional freeform context string (e.g. operation type). */
+  context?: string;
+}
+
+/**
  * Attempts to disconnect a wallet, performing an availability check first.
  *
  * If the wallet extension is not installed, the disconnect is skipped and
@@ -156,15 +462,37 @@ export interface WalletDisconnectResult {
  * lifecycle, so the spinner overlay is visible for the entire operation and
  * is cleared again on every exit path (success, missing wallet, or error).
  *
+ * On every exit path the active key is removed from the persistent store, so
+ * the wallet is not remembered across reload cycles.
+ *
+ * If a transaction is in flight at the time of the disconnect call, pass it
+ * via `pendingTx` so it is logged as a console.warn for post-mortem
+ * debugging — the handler does not change control flow based on it.
+ *
  * @param walletId - The wallet provider ID.
  * @param disconnectFn - The actual disconnect function (e.g. StellarWalletsKit.disconnect()).
  * @param detector - Optional availability-detector override for tests.
+ * @param pendingTx - Optional snapshot of an in-flight transaction at disconnect time.
  */
 export async function disconnectWalletWithCheck(
   walletId: string,
-  disconnectFn: () => Promise<void>,
+  disconnectFn: (signal?: AbortSignal) => Promise<void>,
   detector?: () => boolean,
+  options?: WalletDisconnectTimeoutOptions,
+  pendingTx?: PendingTxSnapshot,
 ): Promise<WalletDisconnectResult> {
+  // Warn immediately if a transaction was in flight when disconnect was called.
+  if (pendingTx && (pendingTx.txId ?? pendingTx.status ?? pendingTx.context)) {
+    console.warn(
+      `${LOG_PREFIX} DISCONNECT WITH PENDING TRANSACTION for "${walletId}":`,
+      {
+        txId: pendingTx.txId ?? null,
+        status: pendingTx.status ?? null,
+        context: pendingTx.context ?? null,
+      },
+    );
+  }
+
   return withWalletDisconnectLoader(async () => {
     const availability = checkWalletAvailabilityById(walletId, detector);
 
@@ -172,6 +500,8 @@ export async function disconnectWalletWithCheck(
       console.warn(
         `${LOG_PREFIX} Wallet "${walletId}" is not installed — skipping disconnect.`,
       );
+      // Remove from active keys store even if wallet is not installed
+      walletActiveKeysStore.removeActiveKey(walletId);
       return {
         success: false,
         error: null,
@@ -181,7 +511,15 @@ export async function disconnectWalletWithCheck(
     }
 
     try {
-      await disconnectFn();
+      await runWalletDisconnectWithTimeout(
+        (signal) => disconnectFn(signal),
+        options,
+      );
+      // Remove from active keys store on successful disconnect
+      walletActiveKeysStore.removeActiveKey(walletId);
+      console.info(
+        `${LOG_PREFIX} Wallet "${walletId}" disconnected successfully.`,
+      );
       return {
         success: true,
         error: null,
@@ -194,7 +532,7 @@ export async function disconnectWalletWithCheck(
           ? err.message
           : "Unknown error during wallet disconnect.";
 
-      console.warn(`${LOG_PREFIX} DISCONNECT FAILED for ${walletId}:`, message);
+      console.error(`${LOG_PREFIX} DISCONNECT FAILED for "${walletId}":`, err);
 
       return {
         success: false,

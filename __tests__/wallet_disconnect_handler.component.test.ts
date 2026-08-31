@@ -123,8 +123,8 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck mocked wallet acti
       expect(result.error).toBe("Freighter extension crashed");
       expect(result.fallbackInstructions).toBeNull();
       expect(result.installUrl).toBeNull();
-      expect(warnSpy).toHaveBeenCalled();
-      const logged = String(warnSpy.mock.calls[0][0]);
+      expect(errorSpy).toHaveBeenCalled();
+      const logged = String(errorSpy.mock.calls[0][0]);
       expect(logged).toContain("[wallet_disconnect_handler]");
       expect(logged).toContain("DISCONNECT FAILED");
       expect(logged).toContain("freighter");
@@ -143,7 +143,7 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck mocked wallet acti
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Albedo popup closed unexpectedly");
-      expect(warnSpy).toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalled();
     });
 
     it("captures error message when disconnect throws Error for xbull", async () => {
@@ -556,8 +556,8 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck mocked wallet acti
 
       await disconnectWalletWithCheck("albedo", disconnectFn, () => true);
 
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      const logged = String(warnSpy.mock.calls[0][0]);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const logged = String(errorSpy.mock.calls[0][0]);
       expect(logged).toContain("[wallet_disconnect_handler]");
       expect(logged).toContain("DISCONNECT FAILED");
       expect(logged).toContain("albedo");
@@ -579,8 +579,8 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck mocked wallet acti
         throw new Error("detector error");
       });
 
-      expect(warnSpy).toHaveBeenCalled();
-      const logged = String(warnSpy.mock.calls[0][0]);
+      expect(errorSpy).toHaveBeenCalled();
+      const logged = String(errorSpy.mock.calls[0][0]);
       expect(logged).toContain("[wallet_disconnect_handler]");
       expect(logged).toContain("AVAILABILITY CHECK FAILED");
     });
@@ -708,13 +708,16 @@ describe("wallet_disconnect_handler disconnectWalletWithCheck mocked wallet acti
 
 describe("wallet_disconnect_handler integration with window globals", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
+    errorSpy.mockRestore();
     const w = window as unknown as Record<string, unknown>;
     delete w["freighterApi"];
     delete w["freighter"];
@@ -779,13 +782,16 @@ describe("wallet_disconnect_handler integration with window globals", () => {
 
 describe("wallet_disconnect_handler checkWalletAvailabilityById detailed scenarios", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it("returns complete result structure when wallet is available", () => {
@@ -846,6 +852,6 @@ describe("wallet_disconnect_handler checkWalletAvailabilityById detailed scenari
     expect(result.available).toBe(false);
     expect(result.setupInstruction).not.toBeNull();
     expect(result.installUrl).toBe("https://www.freighter.app/");
-    expect(warnSpy).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
   });
 });
