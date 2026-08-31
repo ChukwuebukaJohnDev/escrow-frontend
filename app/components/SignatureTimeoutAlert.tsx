@@ -58,25 +58,6 @@ export default function SignatureTimeoutAlert({
     (activeError instanceof Error &&
       activeError.name === "WalletSignatureTimeoutError");
 
-  /**
-   * Derive the parse message directly from the transaction XDR instead of
-   * storing it in state via useEffect.  This avoids the React 19
-   * `react-hooks/set-state-in-effect` lint rule, which flags synchronous
-   * setState calls inside effects as a source of cascading renders.
-   */
-  const parseMessage = useMemo<string | null>(() => {
-    if (!activeTransactionXdr) return null;
-
-    try {
-      parseMultiSigEnvelope(activeTransactionXdr, {
-        parseEnvelopeXdr: createStellarEnvelopeParser(NETWORK_PASSPHRASE),
-      });
-      return null;
-    } catch (parseError) {
-      return parseError instanceof Error ? parseError.message : String(parseError);
-    }
-  }, [activeTransactionXdr]);
-
   useEffect(() => {
     if (!hasTimeout && !networkMismatchMessage) return;
 
@@ -86,8 +67,6 @@ export default function SignatureTimeoutAlert({
       phase: "error",
     });
   }, [activeError, hasTimeout, networkMismatchMessage, transactionId]);
-
- Write-React-Testing-Library-assertions-for-wallet-disconnect-handler-#242-FIX
 
   const parseMessage = useMemo(() => {
     if (!activeTransactionXdr) return null;
@@ -101,7 +80,6 @@ export default function SignatureTimeoutAlert({
       return parseError instanceof Error ? parseError.message : String(parseError);
     }
   }, [activeTransactionXdr]);
-
 
   if (!hasTimeout && !networkMismatchMessage) return null;
 
