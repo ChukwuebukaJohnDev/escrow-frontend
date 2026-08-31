@@ -36,8 +36,9 @@ function applyTheme(theme: Theme) {
  * `localStorage` and applied to the document root so it can be consumed by
  * CSS/tailwind `dark:` variants.
  *
- * Responsive sizing (#312): Adapts padding, gap, text size, and toggle
- * dimensions across mobile (default), tablet (sm), and desktop (lg) viewports.
+ * Mobile overlay (#316): On small viewports the switcher renders inside an
+ * overlay wrapper that ensures it fits within the screen height and all
+ * interactive elements remain reachable/tappable.
  */
 export default function DarkModeSwitcher() {
   const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
@@ -54,31 +55,33 @@ export default function DarkModeSwitcher() {
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 rounded";
 
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={isDark}
-      aria-label={label}
-      title={label}
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      className={`inline-flex items-center gap-1.5 sm:gap-2 bg-surface-card hover:bg-surface-field text-xs sm:text-sm text-text-primary px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg transition ${focusRing}`}
-    >
-      <span aria-hidden="true" className="text-sm sm:text-base leading-none">
-        {isDark ? "ðŸŒ™" : "â˜€ï¸"}
-      </span>
-      <span className="sr-only">
-        {label}
-      </span>
-      <span
-        aria-hidden="true"
-        className="relative inline-flex h-4 w-7 sm:h-5 sm:w-9 items-center rounded-full bg-border-strong transition"
+    <div className="flex items-center max-w-full overflow-hidden">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isDark}
+        aria-label={label}
+        title={label}
+        onClick={() => setTheme(isDark ? "light" : "dark")}
+        className={`inline-flex items-center gap-2 bg-surface-card hover:bg-surface-field text-sm text-text-primary px-2.5 py-2 sm:px-3 rounded-lg transition min-w-0 flex-shrink ${focusRing}`}
       >
+        <span aria-hidden="true" className="text-base leading-none flex-shrink-0">
+          {isDark ? "ðŸŒ™" : "â˜€ï¸"}
+        </span>
+        <span className="sr-only">
+          {label}
+        </span>
         <span
-          className={`inline-block h-3 w-3 sm:h-4 sm:w-4 transform rounded-full bg-white transition ${
-            isDark ? "translate-x-3.5 sm:translate-x-4" : "translate-x-0.5"
-          }`}
-        />
-      </span>
-    </button>
+          aria-hidden="true"
+          className="relative inline-flex h-5 w-9 items-center rounded-full bg-border-strong transition flex-shrink-0"
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+              isDark ? "translate-x-4" : "translate-x-0.5"
+            }`}
+          />
+        </span>
+      </button>
+    </div>
   );
 }
