@@ -173,9 +173,9 @@ export function checkWalletAvailabilityById(
       installUrl: INSTALL_URLS[walletId] ?? null,
     };
   } catch (err) {
-    console.warn(
-      `${LOG_PREFIX} AVAILABILITY CHECK FAILED for ${walletId}:`,
-      err instanceof Error ? err.message : String(err),
+    console.error(
+      `${LOG_PREFIX} AVAILABILITY CHECK FAILED for "${walletId}":`,
+      err,
     );
 
     return {
@@ -437,6 +437,20 @@ export interface WalletDisconnectResult {
 }
 
 /**
+ * Snapshot of an in-flight transaction at the moment a disconnect is
+ * triggered.  All fields are optional so callers can supply whatever
+ * identifying info they have without fabricating values.
+ */
+export interface PendingTxSnapshot {
+  /** Transaction hash / id (XDR hash, ledger hash, or any stable identifier). */
+  txId?: string;
+  /** Human-readable status label (e.g. "signing", "submitted", "pending"). */
+  status?: string;
+  /** Additional freeform context string (e.g. operation type). */
+  context?: string;
+}
+
+/**
  * Attempts to disconnect a wallet, performing an availability check first.
  *
  * If the wallet extension is not installed, the disconnect is skipped and
@@ -451,16 +465,34 @@ export interface WalletDisconnectResult {
  * On every exit path the active key is removed from the persistent store, so
  * the wallet is not remembered across reload cycles.
  *
+ * If a transaction is in flight at the time of the disconnect call, pass it
+ * via `pendingTx` so it is logged as a console.warn for post-mortem
+ * debugging — the handler does not change control flow based on it.
+ *
  * @param walletId - The wallet provider ID.
  * @param disconnectFn - The actual disconnect function (e.g. StellarWalletsKit.disconnect()).
  * @param detector - Optional availability-detector override for tests.
+ * @param pendingTx - Optional snapshot of an in-flight transaction at disconnect time.
  */
 export async function disconnectWalletWithCheck(
   walletId: string,
   disconnectFn: (signal?: AbortSignal) => Promise<void>,
   detector?: () => boolean,
   options?: WalletDisconnectTimeoutOptions,
+  pendingTx?: PendingTxSnapshot,
 ): Promise<WalletDisconnectResult> {
+  // Warn immediately if a transaction was in flight when disconnect was called.
+  if (pendingTx && (pendingTx.txId ?? pendingTx.status ?? pendingTx.context)) {
+    console.warn(
+      `${LOG_PREFIX} DISCONNECT WITH PENDING TRANSACTION for "${walletId}":`,
+      {
+        txId: pendingTx.txId ?? null,
+        status: pendingTx.status ?? null,
+        context: pendingTx.context ?? null,
+      },
+    );
+  }
+
   return withWalletDisconnectLoader(async () => {
     const availability = checkWalletAvailabilityById(walletId, detector);
 
@@ -485,6 +517,9 @@ export async function disconnectWalletWithCheck(
       );
       // Remove from active keys store on successful disconnect
       walletActiveKeysStore.removeActiveKey(walletId);
+      console.info(
+        `${LOG_PREFIX} Wallet "${walletId}" disconnected successfully.`,
+      );
       return {
         success: true,
         error: null,
@@ -497,7 +532,7 @@ export async function disconnectWalletWithCheck(
           ? err.message
           : "Unknown error during wallet disconnect.";
 
-      console.warn(`${LOG_PREFIX} DISCONNECT FAILED for ${walletId}:`, message);
+      console.error(`${LOG_PREFIX} DISCONNECT FAILED for "${walletId}":`, err);
 
       return {
         success: false,
