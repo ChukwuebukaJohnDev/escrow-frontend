@@ -36,7 +36,7 @@ const TYPE_STYLES: Record<NotificationType, string> = {
 const TYPE_ICON: Record<NotificationType, string> = {
   error: "?",
   warning: "?",
-  success: "ï¿½",
+  success: "�",
   info: "?",
 };
 
@@ -83,7 +83,7 @@ export default function NotificationBell({
         onClick={() => setOpen((v) => !v)}
         className={`relative inline-flex items-center justify-center bg-gray-800 hover:bg-gray-700 text-gray-200 text-base w-8 h-8 sm:text-lg sm:w-10 sm:h-10 rounded-lg transition ${focusRing}`}
       >
-        <span aria-hidden="true">ðŸ””</span>
+        <span aria-hidden="true">🔔</span>
         {badgeCount > 0 && (
           <span
             className={`absolute -top-1 -right-1 inline-flex h-3.5 min-w-3.5 sm:h-4 sm:min-w-4 items-center justify-center rounded-full px-0.5 sm:px-1 text-[9px] sm:text-[10px] font-bold ${
