@@ -1,6 +1,13 @@
-import { act, renderHook } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
+import {
+  Account,
+  Asset,
+  BASE_FEE,
+  Keypair,
+  Operation,
+  TransactionBuilder,
+} from "@stellar/stellar-sdk";
 import { describe, expect, it, vi } from "vitest";
-import { Account, Keypair, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 import { useFreighterMultiSigAssembly } from "@/app/hooks/useFreighterMultiSigAssembly";
 import { WalletMultiSigStructureError } from "@/app/lib/wallet_state_context";
 import {
@@ -8,28 +15,35 @@ import {
   type FreighterMultiSigSplit,
 } from "@/app/lib/freighter_connector";
 
-function toBase64(text: string): string {
-  return Buffer.from(text, "utf-8").toString("base64");
-}
-
 const TEST_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 
-// The hook validates XDR against a real @stellar/stellar-sdk parser, so the
-// fixtures must be genuine signed transaction envelopes rather than arbitrary
-// bytes. Building a real envelope (and signing it so `signatures` is
-// populated) exercises the parser instead of failing it.
-function buildSignedEnvelope(): string {
+/**
+ * Build a real, signed transaction envelope.
+ *
+ * The hook parses through the Stellar SDK, so base64 of arbitrary text is
+ * rejected as a malformed envelope. These tests need an envelope that is
+ * actually well-formed, and signed so the parser reports signature slots.
+ */
+function buildSignedEnvelopeXdr(): string {
   const keypair = Keypair.random();
   const account = new Account(keypair.publicKey(), "0");
+
   const transaction = new TransactionBuilder(account, {
-    fee: "100",
-    networkPassphrase: Networks.TESTNET,
+    fee: BASE_FEE,
+    networkPassphrase: TEST_NETWORK_PASSPHRASE,
   })
-    .addOperation(Operation.bumpSequence({ bumpTo: "0" }))
+    .addOperation(
+      Operation.payment({
+        destination: Keypair.random().publicKey(),
+        asset: Asset.native(),
+        amount: "1",
+      })
+    )
     .setTimeout(30)
     .build();
+
   transaction.sign(keypair);
-  return transaction.toEnvelope().toXDR("base64");
+  return transaction.toXDR();
 }
 
 describe("useFreighterMultiSigAssembly hook (#109)", () => {
@@ -38,7 +52,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = buildSignedEnvelope();
+    const xdr = buildSignedEnvelopeXdr();
     const shape = result.current.parseStructure(xdr);
 
     expect(shape.baseXdr).toBe(xdr);
@@ -61,7 +75,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = buildSignedEnvelope();
+    const xdr = buildSignedEnvelopeXdr();
     const tx = result.current.prepareTransaction(xdr);
     expect(tx).toBeDefined();
   });
@@ -81,7 +95,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = buildSignedEnvelope();
+    const xdr = buildSignedEnvelopeXdr();
     const tx = result.current.prepareTransaction(xdr);
     const serialized = result.current.serializeTransaction(tx);
     expect(typeof serialized).toBe("string");
@@ -93,7 +107,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = buildSignedEnvelope();
+    const xdr = buildSignedEnvelopeXdr();
     const signFn = vi.fn(async () => "signed-xdr");
 
     const signed = await result.current.signTransaction(xdr, signFn);
@@ -121,7 +135,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("d".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const split = result.current.createSplit(xdr, {
       publicKey: "GABC",
       hint: "abcd",
@@ -137,7 +151,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("e".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const split = createFreighterMultiSigSplit(xdr, {
       publicKey: "GABC",
       hint: "abcd",
@@ -155,7 +169,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("f".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const splitA = result.current.createSplit(xdr, {
       publicKey: "GA",
       hint: "aaaa",
@@ -188,7 +202,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("g".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const splitA: FreighterMultiSigSplit = createFreighterMultiSigSplit(xdr, {
       publicKey: "GA",
       hint: "aaaa",
@@ -208,7 +222,7 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
       useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
     );
 
-    const xdr = toBase64("h".repeat(200));
+    const xdr = buildSignedEnvelopeXdr();
     const splitA = result.current.createSplit(xdr, {
       publicKey: "GA",
       hint: "aaaa",
