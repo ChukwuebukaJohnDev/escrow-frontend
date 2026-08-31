@@ -281,6 +281,24 @@ describe("DisputeRaiseModal responsive classes (#332)", () => {
     expect(DISPUTE_MODAL_CLASSES.actions).toContain("flex-col-reverse");
     expect(DISPUTE_MODAL_CLASSES.summary).toContain("grid-cols-1");
   });
+
+  it("includes overlay wrapper for mobile viewport height constraints", () => {
+    expect(DISPUTE_MODAL_CLASSES.overlayWrapper).toContain("flex");
+    expect(DISPUTE_MODAL_CLASSES.overlayWrapper).toContain("flex-col");
+    expect(DISPUTE_MODAL_CLASSES.overlayWrapper).toContain("max-h-[92vh]");
+    expect(DISPUTE_MODAL_CLASSES.overlayWrapper).toContain("overflow-hidden");
+  });
+
+  it("includes scrollable content area for middle content", () => {
+    expect(DISPUTE_MODAL_CLASSES.scrollableContent).toContain("flex-1");
+    expect(DISPUTE_MODAL_CLASSES.scrollableContent).toContain("overflow-y-auto");
+    expect(DISPUTE_MODAL_CLASSES.scrollableContent).toContain("min-h-0");
+  });
+
+  it("sets header and actions as flex-shrink-0 to prevent shrinking", () => {
+    expect(DISPUTE_MODAL_CLASSES.header).toContain("flex-shrink-0");
+    expect(DISPUTE_MODAL_CLASSES.actions).toContain("flex-shrink-0");
+  });
 });
 
 // ===========================================================================
@@ -400,6 +418,83 @@ describe("DisputeRaiseModal at varying viewport sizes (#332)", () => {
 
       unmount();
     }
+  });
+
+  it("renders overlay wrapper structure on mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phone);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    const panel = screen.getByTestId(PANEL);
+    expect(panel.firstChild).toHaveClass("flex");
+    expect(panel.firstChild).toHaveClass("flex-col");
+  });
+
+  it("renders scrollable content area on mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phone);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    const panel = screen.getByTestId(PANEL);
+    const scrollableContent = panel.querySelector(".overflow-y-auto");
+    expect(scrollableContent).toBeInTheDocument();
+    expect(scrollableContent).toHaveClass("flex-1");
+  });
+
+  it("keeps action buttons clickable on small mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phoneSmall);
+    const onConfirm = vi.fn();
+    render(<DisputeRaiseModal {...defaultProps} onConfirm={onConfirm} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    // Verify buttons are present and not disabled
+    const confirmBtn = screen.getByTestId("dispute-raise-modal-confirm");
+    const cancelBtn = screen.getByTestId("dispute-raise-modal-cancel");
+    expect(confirmBtn).not.toBeDisabled();
+    expect(cancelBtn).not.toBeDisabled();
+
+    // Verify buttons have proper touch target sizes
+    expect(confirmBtn).toHaveClass("min-h-[44px]");
+    expect(cancelBtn).toHaveClass("min-h-[44px]");
+  });
+
+  it("allows scrolling of middle content on small mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phoneSmall);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    const panel = screen.getByTestId(PANEL);
+    const scrollableContent = panel.querySelector(".overflow-y-auto");
+    expect(scrollableContent).toBeInTheDocument();
+    expect(scrollableContent).toHaveClass("min-h-0");
+  });
+
+  it("maintains header visibility on mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phone);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    const header = screen.getByTestId("dispute-raise-modal-title").parentElement;
+    expect(header).toHaveClass("flex-shrink-0");
+  });
+
+  it("maintains footer actions visibility on mobile viewport", async () => {
+    setViewportWidth(WIDTHS.phone);
+    render(<DisputeRaiseModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    const actions = screen.getByTestId(ACTIONS);
+    expect(actions).toHaveClass("flex-shrink-0");
   });
 
   it("stops tracking resizes after unmount", async () => {
