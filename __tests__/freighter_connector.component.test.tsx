@@ -8,37 +8,10 @@ import {
   HIGH_FEE_THRESHOLD_STROOPS,
 } from "@/app/lib/freighter_connector";
 
-// WalletProvider pulls @creit.tech/stellar-wallets-kit at module scope, whose
-// bundled UMD dependencies are not Node-ESM-importable. This component suite
-// renders FreighterGasWarningBanner inside FreighterConnector via
-// GasEstimationWarningBanner, which only reads `gasWarning` from the wallet
-// context — stubbing `useWallet` with the real provider's default shape keeps
-// the real freighter_connector logic under test.
-const walletContextMock = vi.hoisted(() => ({
-  useWallet: () => ({
-    address: null,
-    assembleMultiSigTransaction: vi.fn(async () => ({
-      uniqueSigners: 0,
-      splitsValidated: 0,
-    })),
-    connect: vi.fn(async () => {}),
-    disconnect: vi.fn(),
-    isConnecting: false,
-    networkMismatchMessage: null,
-    selectedWalletId: "freighter",
-    setSelectedWalletId: vi.fn(),
-    signTransaction: vi.fn(async () => ""),
-    signatureTimeoutError: null,
-    signatureTimeoutXdr: null,
-    clearSignatureTimeout: vi.fn(),
-    simulationResult: null,
-    setSimulationResult: vi.fn(),
-    gasWarning: null,
-  }),
-}));
+const showToast = vi.hoisted(() => vi.fn());
 
-vi.mock("@/app/context/WalletContext", () => ({
-  useWallet: walletContextMock.useWallet,
+vi.mock("@/app/context/ToastContext", () => ({
+  useToast: () => ({ showToast }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -284,6 +257,10 @@ describe("FreighterConnector component (#112)", () => {
     const logged = String(warnSpy.mock.calls[0][0]);
     expect(logged).toContain("SIGNATURE REJECTED");
     expect(logged).toContain("--- stack trace ---");
+    expect(showToast).toHaveBeenCalledWith(
+      "Signature cancelled — you rejected the request in your wallet.",
+      "warning"
+    );
   });
 
   it("also handles 'user declined' rejection phrasing", async () => {

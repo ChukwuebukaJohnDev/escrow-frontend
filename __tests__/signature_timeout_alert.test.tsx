@@ -88,13 +88,12 @@ describe("SignatureTimeoutAlert", () => {
 
   it("keeps the loader counter balanced when an external operation is active", async () => {
     render(<WalletLoaderOverlay />);
-    act(() => {
-      startWalletOperation();
-    });
+    // The overlay subscribes to module-level wallet state, so these calls
+    // update React from outside the render cycle; act() flushes them before
+    // the assertions read the DOM.
+    act(() => startWalletOperation());
     expect(screen.getByTestId("wallet-loader-overlay")).toBeInTheDocument();
-    act(() => {
-      endWalletOperation();
-    });
+    act(() => endWalletOperation());
     await waitFor(() => expect(screen.queryByTestId("wallet-loader-overlay")).not.toBeInTheDocument());
   });
 });

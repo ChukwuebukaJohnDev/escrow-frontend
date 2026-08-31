@@ -60,7 +60,7 @@ describe("signature_timeout_alert timeout bounds (#244)", () => {
     const request: SignatureTimeoutAlertRequest = { xdr: "PAYLOAD-XDR" };
     const signFn = vi.fn(async (xdr: string) => xdr);
 
-    const promise = runSignatureWithTimeout(request, signFn, 5_000);
+    await runSignatureWithTimeout(request, signFn, 5_000);
     await vi.runAllTimersAsync();
 
     expect(signFn).toHaveBeenCalledWith("PAYLOAD-XDR");
@@ -107,9 +107,9 @@ describe("signature_timeout_alert timeout bounds (#244)", () => {
     const signFn = vi.fn(() => new Promise<string>(() => {}));
 
     const promise = runSignatureWithTimeout(request, signFn, 1_000);
-    const onRejected = promise.catch(() => {});
+    const settled = promise.catch(() => {});
     await vi.advanceTimersByTimeAsync(1_000);
-    await onRejected;
+    await settled;
 
     expect(request.payload).toBeNull();
     expect(payload.every((b) => b === 0)).toBe(true);
@@ -132,9 +132,9 @@ describe("signature_timeout_alert timeout bounds (#244)", () => {
     const signFn = vi.fn(() => new Promise<string>(() => {}));
 
     const promise = runSignatureWithTimeout(request, signFn, 500);
-    const onRejected = promise.catch(() => {});
+    const settled = promise.catch(() => {});
     await vi.advanceTimersByTimeAsync(500);
-    await onRejected;
+    await settled;
 
     // Memory cleared — operation cannot leak sensitive bytes post-abort.
     expect(request.payload).toBeNull();
@@ -212,9 +212,9 @@ describe("signature_timeout_alert timeout bounds (#244)", () => {
     });
 
     const promise = runSignatureWithTimeout(request, signFn, 5_000);
-    const onRejected = promise.catch(() => {});
+    const settled = promise.catch(() => {});
     await vi.runAllTimersAsync();
-    await onRejected;
+    await settled;
 
     // Memory should NOT be cleared for non-timeout errors (unmodified request)
     // The timeout path specifically clears; other errors pass through as-is.

@@ -52,12 +52,12 @@ interface Props {
   autoReleaseDeadline?: number | null;
   /**
    * Total auto-release window length in ms. Used with
-   * {@link deadlineWarningThresholdMs} defaults (20% of window, 24h floor).
+   * {@link deadlineWarningThresholdMs} defaults (10% of window, 24h floor).
    */
   autoReleaseWindowMs?: number | null;
   /**
    * Override for when the deadline-approaching warning badge appears.
-   * Defaults to max(24h, 20% of autoReleaseWindowMs) when window is known,
+   * Defaults to max(24h, 10% of autoReleaseWindowMs) when window is known,
    * otherwise a flat 24h floor.
    */
   deadlineWarningThresholdMs?: number;
@@ -84,11 +84,11 @@ const baseBtn =
 export const DEADLINE_WARNING_FLOOR_MS = 24 * 60 * 60 * 1000;
 
 /** Default fraction of the auto-release window used for the warning threshold. */
-export const DEADLINE_WARNING_RATIO = 0.2;
+export const DEADLINE_WARNING_RATIO = 0.1;
 
 /**
  * Resolve the deadline-warning threshold: explicit override wins; otherwise
- * max(24h floor, 20% of the total window), falling back to the 24h floor.
+ * max(24h floor, last 10% of the total window), falling back to the 24h floor.
  */
 export function resolveDeadlineWarningThresholdMs(
   windowMs?: number | null,

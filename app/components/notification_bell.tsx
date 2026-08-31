@@ -36,10 +36,10 @@ const TYPE_STYLES: Record<NotificationType, string> = {
 };
 
 const TYPE_ICON: Record<NotificationType, string> = {
-  error: "✕",
-  warning: "⚠",
-  success: "✓",
-  info: "ℹ",
+  error: "?",
+  warning: "?",
+  success: "�",
+  info: "?",
 };
 
 function computeBadgeCount(notifications: NotificationItem[], fields: NotificationField[]) {
@@ -47,7 +47,7 @@ function computeBadgeCount(notifications: NotificationItem[], fields: Notificati
 }
 
 /**
- * `notification_bell` — navbar alert bell badge.
+ * `notification_bell` - navbar alert bell badge.
  *
  * Accessibility (a11y):
  *  - Native `<button>` so it is keyboard navigable (Tab/Enter/Space).
@@ -73,7 +73,7 @@ export default function NotificationBell({
   const errorCount = notifications.filter((n) => n.type === "error").length + fields.filter((f) => f.error).length;
 
   const triggerStates =
-    "bg-gray-800 text-gray-200 text-lg w-10 h-10 rounded-lg" +
+    "bg-gray-800 text-gray-200 text-base w-8 h-8 sm:text-lg sm:w-10 sm:h-10 rounded-lg" +
     " transition duration-150 ease-out" +
     " hover:bg-gray-700" +
     " active:bg-gray-600 active:scale-95 active:duration-75" +
@@ -96,7 +96,7 @@ export default function NotificationBell({
         <span aria-hidden="true">🔔</span>
         {badgeCount > 0 && (
           <span
-            className={`absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+            className={`absolute -top-1 -right-1 inline-flex h-3.5 min-w-3.5 sm:h-4 sm:min-w-4 items-center justify-center rounded-full px-0.5 sm:px-1 text-[9px] sm:text-[10px] font-bold ${
               errorCount > 0 ? "bg-danger text-white" : "bg-accent text-white"
             }`}
           >
@@ -115,13 +115,13 @@ export default function NotificationBell({
         aria-label={`${label} panel`}
         aria-live="polite"
         hidden={!open}
-        className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border-subtle bg-surface-card shadow-lg z-50"
+        className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border-subtle bg-surface-card shadow-lg z-50"
       >
-        <div className="px-4 py-3 border-b border-border-subtle">
+        <div className="px-3 py-2 sm:px-4 sm:py-3 border-b border-border-subtle">
           <h2 className="text-sm font-semibold text-text-primary">{label}</h2>
         </div>
 
-        <div className="max-h-80 overflow-y-auto p-3 space-y-3">
+        <div className="max-h-60 sm:max-h-80 overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-3">
           {/* Validation field alerts (#324) */}
           {fields.length > 0 && (
             <div role="group" aria-label="Validation errors" className="space-y-2">
@@ -130,7 +130,7 @@ export default function NotificationBell({
                 return (
                   <div
                     key={field.name}
-                    className={`rounded border px-3 py-2 ${
+                    className={`rounded border px-2.5 py-1.5 sm:px-3 sm:py-2 ${
                       hasError
                         ? "border-danger bg-danger/40"
                         : "border-border-subtle bg-surface-field"
@@ -202,7 +202,7 @@ export default function NotificationBell({
               key={notice.id}
               role={notice.type === "error" ? "alert" : "status"}
               aria-live={notice.type === "error" ? "assertive" : "polite"}
-              className={`rounded border px-3 py-2 ${TYPE_STYLES[notice.type]}`}
+              className={`rounded border px-2.5 py-1.5 sm:px-3 sm:py-2 ${TYPE_STYLES[notice.type]}`}
             >
               <div className="flex items-start gap-2">
                 <span aria-hidden="true">{TYPE_ICON[notice.type]}</span>
