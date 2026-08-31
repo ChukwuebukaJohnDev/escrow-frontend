@@ -193,17 +193,22 @@ describe("DisputeRaiseModal responsive classes (#332)", () => {
 
   it("scales panel padding up across the breakpoints", () => {
     render(<DisputeRaiseModal {...defaultProps} />);
-    const panel = screen.getByTestId(PANEL);
-    expect(panel).toHaveClass("p-4");
-    expect(panel).toHaveClass("sm:p-6");
-    expect(panel).toHaveClass("lg:p-8");
+    // #383 moved the padding off the panel and onto the overlay wrapper, so
+    // the panel can stay a flex column while the middle region scrolls.
+    const wrapper = screen.getByTestId(PANEL).firstElementChild as HTMLElement;
+    expect(wrapper).toHaveClass("p-4");
+    expect(wrapper).toHaveClass("sm:p-6");
+    expect(wrapper).toHaveClass("lg:p-8");
   });
 
   it("bounds the panel height so it never exceeds the viewport", () => {
     render(<DisputeRaiseModal {...defaultProps} />);
     const panel = screen.getByTestId(PANEL);
     expect(panel).toHaveClass("max-h-[92vh]");
-    expect(panel).toHaveClass("overflow-y-auto");
+    // Scrolling now happens in the inner content region rather than on the
+    // panel, so the header and actions stay pinned on short viewports.
+    const scrollable = panel.querySelector(".overflow-y-auto");
+    expect(scrollable).toBeInTheDocument();
   });
 
   it("stacks the summary into one column on mobile and two from sm:", () => {
@@ -446,6 +451,12 @@ describe("DisputeRaiseModal at varying viewport sizes (#332)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId(PANEL)).toBeInTheDocument();
+    });
+
+    // #375 keeps the confirm action disabled until a reason is supplied, so
+    // fill the field before asserting the buttons are usable.
+    fireEvent.change(screen.getByTestId("dispute-raise-modal-reason"), {
+      target: { value: "The delivered work does not match the milestone." },
     });
 
     // Verify buttons are present and not disabled
