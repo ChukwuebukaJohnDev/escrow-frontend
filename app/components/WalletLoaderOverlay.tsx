@@ -15,15 +15,16 @@ import ButtonSpinner from "./ButtonSpinner";
  * so Albedo popup operations trigger the same overlay as other wallet operations.
  */
 export default function WalletLoaderOverlay() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [albedoLoadingState, setAlbedoLoadingState] = useState(false);
 
   useEffect(() => {
     const unsubWallet = subscribeToWalletLoading((loading) => {
-      setIsLoading(loading);
+      setWalletLoading(loading);
     });
 
     const unsubAlbedo = albedoLoading.subscribe((state) => {
-      setIsLoading((prev) => prev || state.isLoading);
+      setAlbedoLoadingState(state.isLoading);
     });
 
     return () => {
@@ -32,7 +33,7 @@ export default function WalletLoaderOverlay() {
     };
   }, []);
 
-  if (!isLoading) return null;
+  if (!walletLoading && !albedoLoadingState) return null;
 
   return (
     <div
