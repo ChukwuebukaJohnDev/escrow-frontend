@@ -1,3 +1,10 @@
+interface ValidationError {
+  /** Human-readable error message. */
+  message: string;
+  /** Optional field/input this error belongs to. */
+  field?: string;
+}
+
 interface LoadingSkeletonProps {
   className?: string;
   /**
@@ -9,6 +16,28 @@ interface LoadingSkeletonProps {
   onClick?: () => void;
   "aria-label"?: string;
   tabIndex?: number;
+  /**
+   * A single validation error to surface as an accessible alert
+   * (role="alert", aria-live="assertive").
+   */
+  error?: string | null;
+  /**
+   * Multiple validation errors keyed by field, each rendered as an
+   * accessible alert when present.
+   */
+  validationErrors?: ValidationError[] | Record<string, string> | null;
+}
+
+/**
+ * Returns true for plain objects (including records and single-element
+ * arrays), used to normalize the flexible `validationErrors` prop.
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
 }
 
 /**
@@ -25,6 +54,8 @@ export default function LoadingSkeleton({
   onClick,
   "aria-label": ariaLabel,
   tabIndex,
+  error = null,
+  validationErrors = null,
 }: LoadingSkeletonProps = {}) {
   const interactiveClasses = interactive
     ? "cursor-pointer transition-all duration-200 ease-in-out hover:border-gray-700 hover:bg-gray-900/90 hover:shadow-lg hover:shadow-gray-950/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950"
@@ -34,12 +65,27 @@ export default function LoadingSkeleton({
     ? "opacity-50 cursor-not-allowed pointer-events-none"
     : "";
 
+  // Normalize the validation errors into a stable list of { message, field }.
+  const renderedErrors: ValidationError[] = (() => {
+    if (Array.isArray(validationErrors) || isRecord(validationErrors)) {
+      return Object.entries(validationErrors).map(([key, value]) => {
+        if (typeof value === "string") {
+          return { field: key, message: value };
+        }
+        return { field: value?.field ?? key, message: value?.message ?? "" };
+      });
+    }
+    return error ? [{ message: error }] : [];
+  })();
+
   return (
     <div
-      className={`animate-pulse animate-fade-in w-full ${interactiveClasses} ${disabledClasses} ${className}`.trimEnd()}
+      className={`animate-pulse motion-reduce:animate-none animate-fade-in motion-reduce:transition-none w-full ${interactiveClasses} ${disabledClasses} ${className}`.trimEnd()}
       role={interactive ? "button" : "status"}
       aria-live={interactive ? undefined : "polite"}
+      aria-busy="true"
       aria-label={ariaLabel}
+      aria-describedby={renderedErrors.length > 0 ? "loading-skeleton-errors" : undefined}
       aria-disabled={disabled ? "true" : undefined}
       tabIndex={interactive ? (disabled ? -1 : tabIndex ?? 0) : undefined}
       onClick={!disabled ? onClick : undefined}
@@ -56,9 +102,31 @@ export default function LoadingSkeleton({
       data-testid="loading-skeleton"
     >
       <span className="sr-only">Loading job data…</span>
+      {renderedErrors.length > 0 && (
+        <div
+          id="loading-skeleton-errors"
+          data-testid="loading-skeleton-errors"
+          className="space-y-2 mb-4"
+        >
+          {renderedErrors.map((validationError, index) => (
+            <p
+              key={`${validationError.field ?? "error"}-${index}`}
+              role="alert"
+              aria-live="assertive"
+              data-testid={`loading-skeleton-error-${index}`}
+              className="text-sm text-red-400 bg-red-950/40 border border-red-800 rounded-lg px-3 py-2"
+            >
+              {validationError.field && (
+                <span className="font-medium">{validationError.field}: </span>
+              )}
+              {validationError.message}
+            </p>
+          ))}
+        </div>
+      )}
       {/* Caps the skeleton on small viewports so it scrolls internally
-                instead of pushing the surrounding controls off-screen, and
-                keeps overscroll inside the wrapper rather than the page. */}
+            instead of pushing the surrounding controls off-screen, and
+            keeps overscroll inside the wrapper rather than the page. */}
       <div
         className="max-h-[70vh] sm:max-h-none overflow-y-auto overscroll-contain"
         data-testid="loading-skeleton-mobile-wrapper"
