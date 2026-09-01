@@ -117,11 +117,19 @@ export const DISPUTE_MODAL_CLASSES = {
 
   /** The modal panel itself — full-bleed on mobile, capped and rounded up. */
   panel:
-    "w-full max-w-full max-h-[92vh] overflow-y-auto rounded-t-2xl bg-surface " +
-    "p-4 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6 lg:max-w-2xl lg:p-8",
+    "w-full max-w-full max-h-[92vh] rounded-t-2xl bg-surface " +
+    "shadow-xl sm:max-w-lg sm:rounded-2xl lg:max-w-2xl",
+
+  /** Overlay wrapper for mobile — ensures proper scrolling on small screens. */
+  overlayWrapper:
+    "flex flex-col max-h-[92vh] overflow-hidden p-4 sm:p-6 lg:p-8",
+
+  /** Scrollable content area — allows middle content to scroll on mobile. */
+  scrollableContent:
+    "flex-1 overflow-y-auto min-h-0",
 
   /** Header row — title and close button. */
-  header: "flex items-start justify-between gap-3 mb-4",
+  header: "flex items-start justify-between gap-3 mb-4 flex-shrink-0",
 
   /** Modal title — scales up with the panel. */
   title: "text-base font-semibold text-primary sm:text-lg lg:text-xl",
@@ -140,7 +148,7 @@ export const DISPUTE_MODAL_CLASSES = {
 
   /** Footer actions — stacked full-width on mobile, inline from `sm:`. */
   actions:
-    "mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:gap-3",
+    "mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:gap-3 flex-shrink-0",
 
   /** Buttons — full-width tap targets on mobile, auto-width from `sm:`. */
   button:

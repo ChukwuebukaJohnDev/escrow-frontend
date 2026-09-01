@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Dashboard from "@/app/dashboard/page";
 
@@ -374,15 +374,17 @@ describe("Dashboard — accessibility compliance (ARIA, keyboard, semantic HTML)
 
       render(<Dashboard />);
 
-      await waitFor(() => {
-        const expandButton = screen.getByRole("button", { name: /Job #job-1/i });
-        expandButton.click();
-
-        waitFor(() => {
-          const region = screen.getByRole("region", { name: /Details for job #job-1/i });
-          expect(region).toBeInTheDocument();
-        });
+      const expandButton = await screen.findByRole("button", {
+        name: /Job #job-1/i,
       });
+      if (expandButton.getAttribute("aria-expanded") !== "true") {
+        fireEvent.click(expandButton);
+      }
+
+      const region = await screen.findByRole("region", {
+        name: /Details for job #job-1/i,
+      });
+      expect(region).toBeInTheDocument();
     });
 
     it("role badges have aria-label describing role", async () => {
@@ -467,11 +469,9 @@ describe("Dashboard — accessibility compliance (ARIA, keyboard, semantic HTML)
 
       render(<Dashboard />);
 
-      waitFor(() => {
-        const status = screen.getByRole("status");
-        expect(status).toHaveAttribute("aria-live", "polite");
-        expect(status).toHaveTextContent("Connect your wallet");
-      });
+      const status = screen.getByRole("status");
+      expect(status).toHaveAttribute("aria-live", "polite");
+      expect(status).toHaveTextContent("Connect your wallet");
     });
   });
 
@@ -783,15 +783,17 @@ describe("Dashboard — accessibility compliance (ARIA, keyboard, semantic HTML)
 
       render(<Dashboard />);
 
-      await waitFor(() => {
-        const expandButton = screen.getByRole("button", { name: /Job #job-1/i });
-        expandButton.click();
-
-        waitFor(() => {
-          const milestonesRegion = screen.getByRole("region", { name: "Milestones" });
-          expect(milestonesRegion).toBeInTheDocument();
-        });
+      const expandButton = await screen.findByRole("button", {
+        name: /Job #job-1/i,
       });
+      if (expandButton.getAttribute("aria-expanded") !== "true") {
+        fireEvent.click(expandButton);
+      }
+
+      const milestonesRegion = await screen.findByRole("region", {
+        name: "Milestones",
+      });
+      expect(milestonesRegion).toBeInTheDocument();
     });
   });
 
@@ -1095,14 +1097,18 @@ describe("Dashboard — accessibility compliance (ARIA, keyboard, semantic HTML)
 
       render(<Dashboard />);
 
-      await waitFor(() => {
-        const expandButton = screen.getByRole("button", { name: /Job #job-1/i });
-        expandButton.click();
+      const expandButton = await screen.findByRole("button", {
+        name: /Job #job-1/i,
+      });
+      if (expandButton.getAttribute("aria-expanded") !== "true") {
+        fireEvent.click(expandButton);
+      }
 
-        waitFor(() => {
-          const decorativeText = screen.queryByText("Collapse", { selector: "[aria-hidden='true']" });
-          expect(decorativeText).toBeInTheDocument();
+      await waitFor(() => {
+        const decorativeText = screen.queryByText("Collapse", {
+          selector: "[aria-hidden='true']",
         });
+        expect(decorativeText).toBeInTheDocument();
       });
     });
 
@@ -1114,10 +1120,8 @@ describe("Dashboard — accessibility compliance (ARIA, keyboard, semantic HTML)
 
       render(<Dashboard />);
 
-      waitFor(() => {
-        const status = screen.getByRole("status");
-        expect(status).toHaveAttribute("aria-live", "polite");
-      });
+      const status = screen.getByRole("status");
+      expect(status).toHaveAttribute("aria-live", "polite");
     });
 
     it("role=alert exposes error messages to screen readers immediately", async () => {
