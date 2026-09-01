@@ -12,6 +12,12 @@ import {
 import { useAlbedoMultiSigAssembly } from "@/app/hooks/useAlbedoMultiSigAssembly";
 import { useLedgerMultiSigAssembly } from "@/app/hooks/useLedgerMultiSigAssembly";
 import { withWalletLoader } from "@/app/lib/wallet_state_context";
+import {
+  inspectSignatureFee,
+  DEFAULT_SIGNATURE_FEE_LIMIT_STROOPS,
+  type SignatureTimeoutSimulationResult,
+} from "@/app/lib/signature_timeout_alert";
+import SignatureTimeoutFeeWarningBanner from "./SignatureTimeoutFeeWarningBanner";
 import ButtonSpinner from "./ButtonSpinner";
 
 export interface SignatureTimeoutAlertProps {
@@ -22,6 +28,15 @@ export interface SignatureTimeoutAlertProps {
   signers?: WalletMultiSigSigner[];
   onRetry?: () => Promise<void> | void;
   onDismiss?: () => void;
+  /**
+   * Simulation result that produced the pending transaction. When supplied,
+   * its estimated fee is inspected and a warning banner is shown if the fee
+   * falls outside standard bounds — so the user sees the cost before
+   * re-approving a timed-out signature.
+   */
+  simulation?: SignatureTimeoutSimulationResult | null;
+  /** Override the default fee limit (stroops). */
+  feeLimitStroops?: number;
   className?: string;
 }
 
@@ -37,6 +52,8 @@ export default function SignatureTimeoutAlert({
   signers = [],
   onRetry,
   onDismiss,
+  simulation = null,
+  feeLimitStroops = DEFAULT_SIGNATURE_FEE_LIMIT_STROOPS,
   className = "",
 }: SignatureTimeoutAlertProps) {
   const {
@@ -83,7 +100,13 @@ export default function SignatureTimeoutAlert({
     }
   }, [activeTransactionXdr]);
 
-  if (!hasTimeout && !networkMismatchMessage) return null;
+  // A fee outside standard bounds is worth surfacing on its own, even when
+  // the wallet has not timed out and the network matches.
+  const feeState = inspectSignatureFee(simulation, feeLimitStroops);
+
+  if (!hasTimeout && !networkMismatchMessage && !feeState.hasWarning) {
+    return null;
+  }
 
   async function retry() {
     if (!onRetry || isRetrying) return;
@@ -128,6 +151,7 @@ export default function SignatureTimeoutAlert({
     <section
       role="alert"
       data-testid="signature-timeout-alert"
+      data-fee-severity={feeState.severity}
       className={`border border-warning-soft/40 bg-warning-soft/10 px-4 py-3 text-sm text-text-primary ${className}`}
     >
       {networkMismatchMessage && (
@@ -135,6 +159,11 @@ export default function SignatureTimeoutAlert({
           {networkMismatchMessage}
         </p>
       )}
+      <SignatureTimeoutFeeWarningBanner
+        simulation={simulation}
+        feeLimitStroops={feeLimitStroops}
+        className="mb-2"
+      />
       {hasTimeout && (
         <>
           <h2 className="font-semibold">Signature request timed out</h2>
