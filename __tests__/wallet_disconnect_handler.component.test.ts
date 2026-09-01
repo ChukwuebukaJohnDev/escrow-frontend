@@ -865,12 +865,17 @@ describe("wallet_disconnect_handler checkWalletAvailabilityById detailed scenari
 describe("wallet_disconnect_handler user signature rejection handling", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
-  let toastSpy: ReturnType<typeof vi.fn>;
+  type DisconnectToastHandler = (
+    message: string,
+    type: "warning" | "error" | "info" | "success",
+  ) => void;
+
+  let toastSpy: ReturnType<typeof vi.fn<DisconnectToastHandler>>;
 
   beforeEach(() => {
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    toastSpy = vi.fn();
+    toastSpy = vi.fn<DisconnectToastHandler>();
   });
 
   afterEach(() => {
