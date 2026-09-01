@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import {
   Account,
   Asset,
@@ -254,5 +254,95 @@ describe("useFreighterMultiSigAssembly hook (#109)", () => {
     expect(firstRef.createSplit).toBe(secondRef.createSplit);
     expect(firstRef.signSplit).toBe(secondRef.signSplit);
     expect(firstRef.assemble).toBe(secondRef.assemble);
+  });
+  // Loading state (#307). `withLoading` counts in-flight operations rather
+  // than holding a boolean, so overlapping signatures cannot clear the
+  // spinner while one of them is still running.
+  describe("isLoading", () => {
+    it("is false before any operation runs", () => {
+      const { result } = renderHook(() =>
+        useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
+      );
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it("is true while a signature is in flight and false once it settles", async () => {
+      const { result } = renderHook(() =>
+        useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
+      );
+
+      let release: (value: string) => void = () => {};
+      const signFn = vi.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            release = resolve;
+          })
+      );
+
+      let signing!: Promise<string>;
+      await act(async () => {
+        signing = result.current.signTransaction(buildSignedEnvelopeXdr(), signFn);
+      });
+      expect(result.current.isLoading).toBe(true);
+
+      await act(async () => {
+        release("signed-xdr");
+        await signing;
+      });
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it("stays true until the last of two overlapping operations settles", async () => {
+      const { result } = renderHook(() =>
+        useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
+      );
+
+      const releases: Array<(value: string) => void> = [];
+      const signFn = vi.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            releases.push(resolve);
+          })
+      );
+
+      const xdr = buildSignedEnvelopeXdr();
+      let first!: Promise<string>;
+      let second!: Promise<string>;
+      await act(async () => {
+        first = result.current.signTransaction(xdr, signFn);
+        second = result.current.signTransaction(xdr, signFn);
+      });
+      expect(result.current.isLoading).toBe(true);
+
+      await act(async () => {
+        releases[0]("first");
+        await first;
+      });
+      expect(result.current.isLoading).toBe(true);
+
+      await act(async () => {
+        releases[1]("second");
+        await second;
+      });
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it("clears the loading state when the signing function rejects", async () => {
+      const { result } = renderHook(() =>
+        useFreighterMultiSigAssembly(TEST_NETWORK_PASSPHRASE)
+      );
+
+      const signFn = vi.fn(async () => {
+        throw new Error("user rejected");
+      });
+
+      await act(async () => {
+        await expect(
+          result.current.signTransaction(buildSignedEnvelopeXdr(), signFn)
+        ).rejects.toThrow("user rejected");
+      });
+
+      expect(result.current.isLoading).toBe(false);
+    });
   });
 });
