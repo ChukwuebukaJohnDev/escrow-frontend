@@ -430,4 +430,38 @@ describe("DisputeRaiseModal", () => {
       });
     });
   });
+  // The keyframes themselves live in app/globals.css; these assert the modal
+  // actually opts into them, which is the part a refactor silently drops.
+  describe("Micro-animations", () => {
+    it("fades the backdrop in on open", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      expect(screen.getByTestId("dispute-raise-modal")).toHaveClass(
+        "animate-fade-in"
+      );
+    });
+
+    it("slides the panel in on open", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      expect(screen.getByTestId("dispute-raise-modal-panel")).toHaveClass(
+        "animate-slide-in"
+      );
+    });
+
+    it("shakes the error banner when a submission fails", () => {
+      render(
+        <DisputeRaiseModal
+          {...defaultProps}
+          errorMessage="Transaction rejected."
+        />
+      );
+      expect(screen.getByTestId("dispute-raise-modal-error")).toHaveClass(
+        "animate-shake"
+      );
+    });
+
+    it("does not shake anything while there is no error", () => {
+      render(<DisputeRaiseModal {...defaultProps} />);
+      expect(screen.queryByTestId("dispute-raise-modal-error")).toBeNull();
+    });
+  });
 });

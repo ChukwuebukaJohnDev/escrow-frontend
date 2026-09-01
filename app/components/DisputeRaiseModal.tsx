@@ -259,7 +259,7 @@ export default function DisputeRaiseModal({
                 data-testid="dispute-raise-modal-error"
                 role="alert"
                 aria-live="assertive"
-                className="mt-3 rounded-lg border border-danger bg-danger/20 px-4 py-3 text-sm text-danger-soft"
+                className="mt-3 rounded-lg border border-danger bg-danger/20 px-4 py-3 text-sm text-danger-soft animate-shake"
               >
                 {generalError}
               </div>
