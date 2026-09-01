@@ -113,12 +113,12 @@ export const DISPUTE_MODAL_CLASSES = {
   /** Backdrop — bottom-aligned sheet on mobile, centered dialog from `sm:`. */
   overlay:
     "fixed inset-0 z-50 flex items-end justify-center overflow-y-auto " +
-    "bg-black/60 p-0 sm:items-center sm:p-6",
+    "bg-black/60 p-0 sm:items-center sm:p-6 animate-fade-in",
 
   /** The modal panel itself — full-bleed on mobile, capped and rounded up. */
   panel:
     "w-full max-w-full max-h-[92vh] rounded-t-2xl bg-surface " +
-    "shadow-xl sm:max-w-lg sm:rounded-2xl lg:max-w-2xl",
+    "shadow-xl sm:max-w-lg sm:rounded-2xl lg:max-w-2xl animate-slide-in",
 
   /** Overlay wrapper for mobile — ensures proper scrolling on small screens. */
   overlayWrapper:

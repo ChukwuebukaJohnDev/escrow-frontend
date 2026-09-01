@@ -5,6 +5,7 @@ import { ActionState } from "@/app/hooks/useActionStates";
 import CountdownTimer from "@/app/components/CountdownTimer";
 import TxStatusBanner from "@/app/components/TxStatusBanner";
 import ButtonSpinner from "@/app/components/ButtonSpinner";
+import DisputeRaiseModal from "@/app/components/DisputeRaiseModal";
 import { formatBaseUnits } from "@/app/lib/amounts";
 
 interface Milestone {
@@ -163,6 +164,10 @@ export default function MilestoneCard({
   void unusedProps;
 
   // Local state for the partial-release amount input and its validation error
+  // Raising a dispute now goes through a confirmation modal rather than
+  // firing onDispute straight from the button, so the reason can be captured
+  // and the irreversibility spelled out before anything is submitted.
+  const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
   const [partialAmount, setPartialAmount] = useState("");
   const [partialAmtError, setPartialAmtError] = useState<string | null>(null);
 
@@ -454,7 +459,7 @@ export default function MilestoneCard({
           {(isClient || isFreelancer) &&
             ["Pending", "Delivered"].includes(milestone.status) && (
               <button
-                onClick={() => onDispute?.(milestone.index)}
+                onClick={() => setIsDisputeModalOpen(true)}
                 disabled={!onDispute}
                 aria-disabled={!onDispute}
                 aria-label={`Dispute ${milestoneLabel}`}
@@ -583,6 +588,17 @@ export default function MilestoneCard({
           />
         </div>
       )}
+
+      <DisputeRaiseModal
+        isOpen={isDisputeModalOpen}
+        onClose={() => setIsDisputeModalOpen(false)}
+        milestoneIndex={milestone.index}
+        amount={`${displayAmount} ${amountSymbol}`}
+        onSubmit={() => {
+          setIsDisputeModalOpen(false);
+          onDispute?.(milestone.index);
+        }}
+      />
     </div>
   );
 }
