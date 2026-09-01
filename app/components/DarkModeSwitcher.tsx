@@ -17,6 +17,10 @@ export interface DarkModeSwitcherProps {
   className?: string;
   /** Accessible label override */
   ariaLabel?: string;
+  /** Validation error message */
+  error?: string;
+  /** ARIA describedby descriptor */
+  ariaDescribedBy?: string;
 }
 
 /**
@@ -68,6 +72,8 @@ export default function DarkModeSwitcher({
   id,
   className = "",
   ariaLabel,
+  error,
+  ariaDescribedBy,
 }: DarkModeSwitcherProps) {
   const checked = Boolean(isDarkMode);
   const isEmpty = isDarkMode === null || isDarkMode === undefined;
@@ -110,60 +116,78 @@ export default function DarkModeSwitcher({
     onToggle?.();
   };
 
+  const errorId = error ? `${id || "dark-mode-switcher"}-error` : undefined;
+  const describedBy = [ariaDescribedBy, errorId].filter(Boolean).join(" ") || undefined;
+
   return (
-    <button
-      id={id}
-      data-testid="dark-mode-switcher"
-      data-state={checked ? "dark" : "light"}
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      aria-disabled={isDisabled}
-      disabled={isDisabled}
-      tabIndex={isDisabled ? -1 : 0}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      className={[
-        // base layout
-        "relative inline-flex h-7 w-12 items-center rounded-full p-1",
-        // transition & cursor
-        "transition-colors duration-200 ease-in-out",
-        "cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
-        // colors - accessible contrast using design tokens
-        checked
-          ? "bg-accent hover:bg-accent-hover"
-          : "bg-surface-field border border-border-subtle hover:bg-surface-field/80",
-        // focus-visible premium ring
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page",
-        // hover / focus tokens
-        "hover:shadow-sm focus-visible:shadow-md",
-        className,
-      ].join(" ")}
-    >
-      <span className="sr-only">{label}</span>
-      <span
-        aria-hidden="true"
-        data-testid="dark-mode-switcher-thumb"
+    <div className="flex flex-col gap-1">
+      <button
+        id={id}
+        data-testid="dark-mode-switcher"
+        data-state={checked ? "dark" : "light"}
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        aria-disabled={isDisabled}
+        aria-invalid={Boolean(error)}
+        aria-describedby={describedBy}
+        disabled={isDisabled}
+        tabIndex={isDisabled ? -1 : 0}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
         className={[
-          "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm",
-          "transition-transform duration-200 ease-in-out",
-          checked ? "translate-x-5" : "translate-x-0",
-          "ring-0",
+          // base layout
+          "relative inline-flex h-7 w-12 items-center rounded-full p-1",
+          // transition & cursor
+          "transition-colors duration-200 ease-in-out",
+          "cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
+          // colors - accessible contrast using design tokens
+          checked
+            ? "bg-accent hover:bg-accent-hover"
+            : error
+              ? "bg-surface-field border border-red-500 hover:bg-surface-field/80"
+              : "bg-surface-field border border-border-subtle hover:bg-surface-field/80",
+          // focus-visible premium ring
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page",
+          // hover / focus tokens
+          "hover:shadow-sm focus-visible:shadow-md",
+          className,
         ].join(" ")}
-      />
-      {/* Decorative icons - hidden from AT */}
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute left-1.5 text-[10px] leading-none transition-opacity duration-200 ${checked ? "opacity-60 text-white" : "opacity-0"}`}
       >
-        &#9790;
-      </span>
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute right-1.5 text-[10px] leading-none transition-opacity duration-200 ${checked ? "opacity-0" : "opacity-60 text-text-muted"}`}
-      >
-        &#9788;
-      </span>
-    </button>
+        <span className="sr-only">{label}</span>
+        <span
+          aria-hidden="true"
+          data-testid="dark-mode-switcher-thumb"
+          className={[
+            "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm",
+            "transition-transform duration-200 ease-in-out",
+            checked ? "translate-x-5" : "translate-x-0",
+            "ring-0",
+          ].join(" ")}
+        />
+        {/* Decorative icons - hidden from AT */}
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute left-1.5 text-[10px] leading-none transition-opacity duration-200 ${checked ? "opacity-60 text-white" : "opacity-0"}`}
+        >
+          &#9790;
+        </span>
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute right-1.5 text-[10px] leading-none transition-opacity duration-200 ${checked ? "opacity-0" : "opacity-60 text-text-muted"}`}
+        >
+          &#9788;
+        </span>
+      </button>
+      {error && (
+        <p
+          id={errorId}
+          role="alert"
+          className="text-xs text-red-400 mt-1"
+        >
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

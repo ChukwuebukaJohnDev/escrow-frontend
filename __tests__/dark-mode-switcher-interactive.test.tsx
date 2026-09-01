@@ -6,49 +6,49 @@ describe("DarkModeSwitcher - premium interactive states #311", () => {
   describe("hover states - Tailwind hover: utilities", () => {
     it("has hover:bg-accent-hover or hover: opacity for dark mode", () => {
       render(<DarkModeSwitcher isDarkMode={true} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/hover:/);
+      expect(screen.getByRole("switch").className).toContain("hover:bg-accent-hover");
     });
 
     it("has hover:bg-surface-field for light mode", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/hover:/);
+      expect(screen.getByRole("switch").className).toContain("hover:bg-surface-field");
     });
 
     it("has hover:shadow-sm utility", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/hover:|shadow/);
+      expect(screen.getByRole("switch").className).toContain("hover:shadow-sm");
     });
 
     it("thumb has hover transition (via parent)", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/transition/);
+      expect(screen.getByRole("switch").className).toContain("transition-colors");
     });
   });
 
   describe("focus-visible states - ring, outline, shadow", () => {
     it("has focus-visible:outline-none", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/focus-visible:/);
+      expect(screen.getByRole("switch").className).toContain("focus-visible:outline-none");
     });
 
     it("has focus-visible:ring-2", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/focus-visible:/) //-2");
+      expect(screen.getByRole("switch").className).toContain("focus-visible:ring-2");
     });
 
     it("has focus-visible:ring-accent", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/focus-visible:/) //-accent");
+      expect(screen.getByRole("switch").className).toContain("focus-visible:ring-accent");
     });
 
     it("has focus-visible:ring-offset-2", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/focus-visible:/) //-offset-2");
+      expect(screen.getByRole("switch").className).toContain("focus-visible:ring-offset-2");
     });
 
     it("has focus-visible:ring-offset-surface-page", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      expect(screen.getByRole("switch").className).toMatch(/focus-visible:/) //-offset-surface-page");
+      expect(screen.getByRole("switch").className).toContain("focus-visible:ring-offset-surface-page");
     });
 
     it("has focus-visible:shadow-md", () => {
@@ -93,7 +93,7 @@ describe("DarkModeSwitcher - premium interactive states #311", () => {
     it("has transition-colors duration-200", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
       const cls = screen.getByRole("switch").className;
-      expect(cls).toMatch(/transition/);
+      expect(cls).toContain("transition-colors");
       expect(cls).toContain("duration-200");
     });
 
@@ -121,7 +121,8 @@ describe("DarkModeSwitcher - premium interactive states #311", () => {
   describe("opacity and cursor styles", () => {
     it("enabled has opacity via hover (not disabled opacity)", () => {
       render(<DarkModeSwitcher isDarkMode={false} onToggle={vi.fn()} />);
-      // has disabled variant (Tailwind) but not active when enabled
+      expect(screen.getByRole("switch").className.split(" ")).not.toContain("opacity-50");
+      // but has disabled:opacity-50
       expect(screen.getByRole("switch").className).toContain("disabled:opacity-50");
     });
 
