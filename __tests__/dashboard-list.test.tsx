@@ -27,7 +27,21 @@ vi.mock("@/app/components/MilestoneCard", () => ({
 }));
 
 vi.mock("@/app/components/EmptyStateCard", () => ({
-  default: ({ testId, ariaLabel, title, description, icon, badges }) => (
+  default: ({
+    testId,
+    ariaLabel,
+    title,
+    description,
+    icon,
+    badges,
+  }: {
+    testId?: string;
+    ariaLabel?: string;
+    title: string;
+    description: string;
+    icon?: string;
+    badges?: string[];
+  }) => (
     <div
       data-testid={testId}
       role="region"
@@ -80,7 +94,12 @@ describe("Dashboard — jobs list (dashboard_list) rendering", () => {
     });
   });
 
-  const mockJobsResponse = (jobs = [], overrides = {}) => ({
+  type MockJob = ReturnType<typeof mockJob>;
+
+  const mockJobsResponse = (
+    jobs: MockJob[] = [],
+    overrides: Record<string, unknown> = {}
+  ) => ({
     success: true,
     data: jobs,
     page: 1,
@@ -89,7 +108,7 @@ describe("Dashboard — jobs list (dashboard_list) rendering", () => {
     ...overrides,
   });
 
-  const mockJob = (overrides = {}) => ({
+  const mockJob = (overrides: Record<string, unknown> = {}) => ({
     id: "job-1234567890abcdef",
     client: "GCLIENTADDRESS1234567890123456789012345678901234",
     freelancer: "GFREELANCERADDRESS12345678901234567890123456",
@@ -104,7 +123,7 @@ describe("Dashboard — jobs list (dashboard_list) rendering", () => {
     ...overrides,
   });
 
-  const setupFetch = (response) => {
+  const setupFetch = (response: unknown) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       json: async () => response,
     }));
@@ -112,7 +131,7 @@ describe("Dashboard — jobs list (dashboard_list) rendering", () => {
 
   describe("Loading state", () => {
     it("shows LoadingSkeleton while fetching jobs", async () => {
-      let resolveFetch;
+      let resolveFetch!: (value: unknown) => void;
       const fetchPromise = new Promise((resolve) => {
         resolveFetch = resolve;
       });
