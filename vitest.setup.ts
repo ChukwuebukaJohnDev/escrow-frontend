@@ -1,5 +1,25 @@
 import "@testing-library/jest-dom/vitest";
 
+// jsdom doesn't implement matchMedia. Provide a minimal stub so any code
+// that calls window.matchMedia("...").matches doesn't throw.
+if (typeof window !== "undefined" && typeof window.matchMedia === "undefined") {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: (query: string): MediaQueryList =>
+      ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as MediaQueryList,
+  });
+}
+
 // jsdom environment: normalise the web-storage globals across Node versions.
 //
 // Newer Node releases ship an experimental `localStorage` global that reads as
