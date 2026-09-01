@@ -24,6 +24,8 @@ export interface NotificationBellProps {
   fields?: NotificationField[];
   /** Label used for the trigger button (defaults to "Notifications"). */
   label?: string;
+  /** Disables the trigger and its panel while retaining the unread badge. */
+  disabled?: boolean;
 }
 
 const TYPE_STYLES: Record<NotificationType, string> = {
@@ -63,14 +65,20 @@ export default function NotificationBell({
   notifications = [],
   fields = [],
   label = "Notifications",
+  disabled = false,
 }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const badgeCount = computeBadgeCount(notifications, fields);
   const errorCount = notifications.filter((n) => n.type === "error").length + fields.filter((f) => f.error).length;
 
-  const focusRing =
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 rounded";
+  const triggerStates =
+    "bg-gray-800 text-gray-200 text-base w-8 h-8 sm:text-lg sm:w-10 sm:h-10 rounded-lg" +
+    " transition duration-150 ease-out" +
+    " hover:bg-gray-700" +
+    " active:bg-gray-600 active:scale-95 active:duration-75" +
+    " focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950" +
+    " disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-gray-800 disabled:hover:bg-gray-800 disabled:active:bg-gray-800 disabled:active:scale-100 disabled:focus-visible:ring-0 disabled:focus-visible:ring-offset-0";
 
   return (
     <div className="relative inline-block">
@@ -80,8 +88,10 @@ export default function NotificationBell({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={panelId}
+        aria-disabled={disabled || undefined}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className={`relative inline-flex items-center justify-center bg-gray-800 hover:bg-gray-700 text-gray-200 text-base w-8 h-8 sm:text-lg sm:w-10 sm:h-10 rounded-lg transition ${focusRing}`}
+        className={`relative inline-flex items-center justify-center ${triggerStates}`}
       >
         <span aria-hidden="true">🔔</span>
         {badgeCount > 0 && (
@@ -157,7 +167,35 @@ export default function NotificationBell({
 
           {/* Notifications */}
           {notifications.length === 0 && fields.length === 0 && (
-            <p className="text-sm text-text-muted">You&apos;re all caught up.</p>
+            <div
+              data-testid="notification-bell-empty-state"
+              role="status"
+              aria-label="Notifications and validation look good"
+              className="flex flex-col items-center gap-1 py-8 text-center"
+            >
+              <span
+                aria-hidden="true"
+                className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-surface-field text-lg"
+              >
+                🛎️
+              </span>
+              <p className="text-sm font-medium text-text-primary">
+                You&apos;re all caught up.
+              </p>
+              <p className="max-w-[16rem] text-xs text-text-muted">
+                No alerts right now. We&apos;ll surface anything that needs
+                your attention here.
+              </p>
+            </div>
+          )}
+          {notifications.length === 0 && fields.length > 0 && (
+            <div
+              data-testid="notification-bell-notifications-empty"
+              role="status"
+              className="rounded border border-dashed border-border-subtle px-3 py-2 text-center"
+            >
+              <p className="text-xs text-text-muted">No new notifications.</p>
+            </div>
           )}
           {notifications.map((notice) => (
             <div
