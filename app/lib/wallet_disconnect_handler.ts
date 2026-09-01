@@ -469,10 +469,15 @@ export interface PendingTxSnapshot {
  * via `pendingTx` so it is logged as a console.warn for post-mortem
  * debugging — the handler does not change control flow based on it.
  *
+ * User signature rejections are caught gracefully: a warning toast is shown
+ * and the function returns success (since the user intentionally cancelled).
+ *
  * @param walletId - The wallet provider ID.
  * @param disconnectFn - The actual disconnect function (e.g. StellarWalletsKit.disconnect()).
  * @param detector - Optional availability-detector override for tests.
+ * @param options - Optional timeout and cleanup options.
  * @param pendingTx - Optional snapshot of an in-flight transaction at disconnect time.
+ * @param showToast - Optional toast handler for user rejection warnings.
  */
 export async function disconnectWalletWithCheck(
   walletId: string,
@@ -480,6 +485,7 @@ export async function disconnectWalletWithCheck(
   detector?: () => boolean,
   options?: WalletDisconnectTimeoutOptions,
   pendingTx?: PendingTxSnapshot,
+  showToast?: (message: string, type: "warning" | "error" | "info" | "success") => void,
 ): Promise<WalletDisconnectResult> {
   // Warn immediately if a transaction was in flight when disconnect was called.
   if (pendingTx && (pendingTx.txId ?? pendingTx.status ?? pendingTx.context)) {
@@ -527,6 +533,28 @@ export async function disconnectWalletWithCheck(
         installUrl: null,
       };
     } catch (err) {
+      // Handle user rejection gracefully - show warning toast and return success
+      if (isWalletDisconnectUserRejected(err)) {
+        console.warn(
+          `${LOG_PREFIX} DISCONNECT REJECTED by user for "${walletId}":`,
+          err,
+        );
+        // Remove from active keys store even on user rejection
+        walletActiveKeysStore.removeActiveKey(walletId);
+        if (showToast) {
+          showToast(
+            "Disconnect cancelled — you rejected the request in your wallet.",
+            "warning",
+          );
+        }
+        return {
+          success: true,
+          error: null,
+          fallbackInstructions: null,
+          installUrl: null,
+        };
+      }
+
       const message =
         err instanceof Error
           ? err.message
@@ -746,6 +774,37 @@ export function warnOnDisconnectNetworkMismatch(
   }
 
   return state;
+}
+
+// =============================================================
+// User signature rejection handling (#235)
+// =============================================================
+
+export class WalletDisconnectUserRejectedError extends Error {
+  constructor(message = "user rejected transaction") {
+    super(message);
+    this.name = "WalletDisconnectUserRejectedError";
+  }
+}
+
+/**
+ * Detects "user rejected the signature request" style errors from wallet
+ * disconnect operations. Mirrors the pattern used in albedo_connector and
+ * freighter_connector for consistency across the codebase.
+ */
+export function isWalletDisconnectUserRejected(err: unknown): boolean {
+  if (err instanceof WalletDisconnectUserRejectedError) return true;
+  if (!(err instanceof Error)) return false;
+  const message = err.message.toLowerCase();
+  return (
+    message.includes("user rejected") ||
+    message.includes("user declined") ||
+    message.includes("request rejected") ||
+    message.includes("denied by the user") ||
+    message.includes("rejected by user") ||
+    message.includes("canceled by user") ||
+    message.includes("cancelled by user")
+  );
 }
 
 // =============================================================

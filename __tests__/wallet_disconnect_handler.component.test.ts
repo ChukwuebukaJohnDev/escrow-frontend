@@ -3,6 +3,8 @@ import {
   detectWalletExtensionById,
   checkWalletAvailabilityById,
   disconnectWalletWithCheck,
+  isWalletDisconnectUserRejected,
+  WalletDisconnectUserRejectedError,
   type WalletDisconnectResult,
 } from "@/app/lib/wallet_disconnect_handler";
 
@@ -853,5 +855,327 @@ describe("wallet_disconnect_handler checkWalletAvailabilityById detailed scenari
     expect(result.setupInstruction).not.toBeNull();
     expect(result.installUrl).toBe("https://www.freighter.app/");
     expect(errorSpy).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// User signature rejection handling (#235)
+// ---------------------------------------------------------------------------
+
+describe("wallet_disconnect_handler user signature rejection handling", () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  type DisconnectToastHandler = (
+    message: string,
+    type: "warning" | "error" | "info" | "success",
+  ) => void;
+
+  let toastSpy: ReturnType<typeof vi.fn<DisconnectToastHandler>>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    toastSpy = vi.fn<DisconnectToastHandler>();
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  // -------------------------------------------------------------------------
+  // isWalletDisconnectUserRejected detection function
+  // -------------------------------------------------------------------------
+
+  describe("isWalletDisconnectUserRejected detection", () => {
+    it("returns true for WalletDisconnectUserRejectedError instance", () => {
+      const error = new WalletDisconnectUserRejectedError();
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+
+    it("returns true for error with 'user rejected' message", () => {
+      const error = new Error("user rejected transaction");
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+
+    it("returns true for error with 'user declined' message", () => {
+      const error = new Error("user declined the request");
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+
+    it("returns true for error with 'request rejected' message", () => {
+      const error = new Error("request rejected by wallet");
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+
+    it("returns true for error with 'denied by the user' message", () => {
+      const error = new Error("denied by the user");
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+
+    it("returns true for error with 'rejected by user' message", () => {
+      const error = new Error("rejected by user");
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+
+    it("returns true for error with 'canceled by user' message", () => {
+      const error = new Error("canceled by user");
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+
+    it("returns true for error with 'cancelled by user' message", () => {
+      const error = new Error("cancelled by user");
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+
+    it("returns false for non-Error objects", () => {
+      expect(isWalletDisconnectUserRejected("user rejected")).toBe(false);
+      expect(isWalletDisconnectUserRejected(null)).toBe(false);
+      expect(isWalletDisconnectUserRejected(undefined)).toBe(false);
+      expect(isWalletDisconnectUserRejected(123)).toBe(false);
+    });
+
+    it("returns false for errors without rejection keywords", () => {
+      const error = new Error("network timeout");
+      expect(isWalletDisconnectUserRejected(error)).toBe(false);
+    });
+
+    it("is case-insensitive for rejection keywords", () => {
+      const error = new Error("USER REJECTED TRANSACTION");
+      expect(isWalletDisconnectUserRejected(error)).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // disconnectWalletWithCheck with user rejection
+  // -------------------------------------------------------------------------
+
+  describe("disconnectWalletWithCheck with user rejection", () => {
+    it("handles user rejection with toast notification", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("user rejected transaction");
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "freighter",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.error).toBeNull();
+      expect(result.fallbackInstructions).toBeNull();
+      expect(result.installUrl).toBeNull();
+      expect(toastSpy).toHaveBeenCalledTimes(1);
+      expect(toastSpy).toHaveBeenCalledWith(
+        "Disconnect cancelled — you rejected the request in your wallet.",
+        "warning",
+      );
+      expect(warnSpy).toHaveBeenCalled();
+      const logged = String(warnSpy.mock.calls[0][0]);
+      expect(logged).toContain("[wallet_disconnect_handler]");
+      expect(logged).toContain("DISCONNECT REJECTED");
+      expect(logged).toContain("freighter");
+    });
+
+    it("handles user rejection without toast handler", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("user declined");
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "albedo",
+        disconnectFn,
+        () => true,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.error).toBeNull();
+      expect(toastSpy).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it("handles WalletDisconnectUserRejectedError instance", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new WalletDisconnectUserRejectedError();
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "xbull",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.error).toBeNull();
+      expect(toastSpy).toHaveBeenCalledWith(
+        "Disconnect cancelled — you rejected the request in your wallet.",
+        "warning",
+      );
+    });
+
+    it("removes active key on user rejection", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("user rejected transaction");
+      });
+
+      // Register an active key first
+      const { registerActiveWalletKey } = await import("@/app/lib/wallet_disconnect_handler");
+      registerActiveWalletKey("freighter", "GTEST123");
+
+      const result = await disconnectWalletWithCheck(
+        "freighter",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(result.success).toBe(true);
+      // Verify the key was removed
+      const { walletActiveKeysStore } = await import("@/app/lib/wallet_disconnect_handler");
+      expect(walletActiveKeysStore.hasActiveKey("freighter")).toBe(false);
+    });
+
+    it("handles 'request rejected' error message", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("request rejected by wallet");
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "hana",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(result.success).toBe(true);
+      expect(toastSpy).toHaveBeenCalled();
+    });
+
+    it("handles 'denied by the user' error message", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("denied by the user");
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "freighter",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(result.success).toBe(true);
+      expect(toastSpy).toHaveBeenCalled();
+    });
+
+    it("handles 'cancelled by user' error message", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("cancelled by user");
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "albedo",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(result.success).toBe(true);
+      expect(toastSpy).toHaveBeenCalled();
+    });
+
+    it("does not treat non-rejection errors as user rejection", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("network timeout");
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "freighter",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("network timeout");
+      expect(toastSpy).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalled();
+    });
+
+    it("does not treat generic errors as user rejection", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("wallet disconnected unexpectedly");
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "xbull",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("wallet disconnected unexpectedly");
+      expect(toastSpy).not.toHaveBeenCalled();
+    });
+
+    it("logs warning when user rejects disconnect", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("user rejected transaction");
+      });
+
+      await disconnectWalletWithCheck(
+        "freighter",
+        disconnectFn,
+        () => true,
+        undefined,
+        undefined,
+        toastSpy,
+      );
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const logged = String(warnSpy.mock.calls[0][0]);
+      expect(logged).toContain("[wallet_disconnect_handler]");
+      expect(logged).toContain("DISCONNECT REJECTED");
+      expect(logged).toContain("freighter");
+    });
+
+    it("handles user rejection with pending transaction context", async () => {
+      const disconnectFn = vi.fn(async () => {
+        throw new Error("user rejected transaction");
+      });
+
+      const result = await disconnectWalletWithCheck(
+        "freighter",
+        disconnectFn,
+        () => true,
+        undefined,
+        { txId: "tx_123", status: "signing", context: "milestone release" },
+        toastSpy,
+      );
+
+      expect(result.success).toBe(true);
+      expect(toastSpy).toHaveBeenCalled();
+      // Should also log the pending transaction warning
+      expect(warnSpy).toHaveBeenCalled();
+    });
   });
 });
